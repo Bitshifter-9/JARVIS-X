@@ -13,6 +13,8 @@ a claim.
 | 6 | **Excessive autonomy** | The model picks a destructive action | Policy engine is deterministic and lives outside the agent; the executor revalidates independently before dispatch; R4 is denied unconditionally | `test_policy_denies_r4.py`, `test_executor_revalidates.py` |
 | 7 | **Cross-user access** | A query is missing its tenant filter | `user_id` on every table and every query; row-isolation test sweeps all repository methods | `test_tenant_isolation.py` |
 | 8 | **Runaway cost / spam** | Loop, call storm, notification storm | Token/step/wall-clock budgets; per-user daily caps; circuit breakers; monthly LLM budget guard | `test_step_budget.py`, `test_notification_cap.py` |
+| 9 | **Third-party model exposure** | Email, calendar and LMS content is sent to Groq / Gemini / OpenRouter for classification and extraction | **New in the cloud-first design — inference used to be local.** Minimize before sending: extraction receives the *smallest span* that can contain a deadline, not the whole thread. Strip attachments, signatures and quoted history. Never send OAuth tokens, secrets or other users' data. Prefer providers whose terms exclude training on API data, and record the chosen provider per call in `llm_calls` so exposure is auditable after the fact. Offer `LLM_LOCAL_ONLY=true` for users who want Ollama-only operation, accepting weaker extraction. | `test_extraction_payload_minimization.py`, `test_no_secrets_in_llm_payload.py` |
+| 10 | **Malicious web content via the cloud browser** | A page the browser worker visits carries injection text, or attempts drive-by navigation | Page text is untrusted data on the same footing as email — it can propose no tool call. The browser runs in an isolated profile with **no logged-in personal session by default**; a connector supplies scoped credentials only for the site it owns. Navigation is allowlisted per action, downloads are disabled, and the DOM snapshot is captured for evidence rather than fed back as instructions. | `tests/adversarial/test_browser_injection.py` |
 
 ## Trust boundaries
 
@@ -23,6 +25,8 @@ a claim.
 3. The agent *proposes*. The policy service returns `ALLOW` / `REQUIRE_APPROVAL` / `DENY`. The executor
    revalidates before dispatch.
 4. The Mac opens only an outbound authenticated connection. No public port, no raw shell endpoint.
+5. **A model provider is an external party.** Anything sent to Groq, Gemini or OpenRouter has left your
+   control. Payload minimization is a security control, not an optimization.
 
 ## Deliberate deletions from v1
 

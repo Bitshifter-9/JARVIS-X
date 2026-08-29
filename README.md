@@ -12,14 +12,15 @@ Not a chatbot. Not a voice assistant that opens apps. A closed loop:
 event → task → prediction → recovery plan → approval → execution → verified evidence → escalation
 ```
 
+**It runs in the cloud.** Your Mac is an optional execution node, never a dependency — deadlines still fire,
+predictions still update, approvals still resolve and browser actions still execute with the laptop shut.
+
 <sub>Successor to [`Bitshifter-9/Jarvis-`](https://github.com/Bitshifter-9/Jarvis-) · v1 source preserved in
 [`legacy/jarvis-v1/`](legacy/jarvis-v1/)</sub>
 
 ---
 
 ## Why this is different
-
-Most assistants answer questions or run commands. JARVIS X manages commitments across your digital life.
 
 | | Typical assistant | JARVIS X |
 |---|---|---|
@@ -29,9 +30,10 @@ Most assistants answer questions or run commands. JARVIS X manages commitments a
 | Consequences | Just does it | R0–R4 risk policy; approval required before external effects |
 | Proof of success | "Done!" | Foreground bundle id, pid, DOM state, provider message id |
 | Stoppability | Kill the terminal | Three independent kill switches; evidence is never deleted |
+| Availability | Dies with the process | Cloud-resident; survives your Mac being offline |
 
-**The differentiator is failure prediction.** Not reminders — knowing the plan is mathematically unlikely to
-succeed:
+**The differentiator is failure prediction** — not reminders, but knowing the plan is mathematically unlikely
+to succeed:
 
 > *"You have 170 usable minutes, while the 80th-percentile remaining work is 260 minutes. Removing the
 > optional Alexa animation and postponing the knowledge-graph visualization raises predicted completion
@@ -43,32 +45,32 @@ succeed:
 
 ```
                         SURFACES
-   Flutter macOS Control Center · Flutter Android · Telegram · (Alexa)
+   Flutter macOS · Flutter Android · Telegram · WhatsApp · Alexa · phone call
                              │
                     EDGE  —  Caddy + Cloudflare
                     auto-TLS · rate limit · signature check
                              │
    ┌───────────────── ONE CONTAINER, THREE ENTRYPOINTS ─────────────────┐
-   │  api        FastAPI: REST + SSE + WebSocket                        │
-   │  worker     agent loop · connectors · verifier                     │
+   │  api        FastAPI: REST + SSE + WebSocket + OAuth2 server        │
+   │  worker     agent loop · connectors · browser · verifier           │
    │  scheduler  30 s tick: due schedules → jobs                        │
    │                                                                    │
    │  AGENT CORE   INGEST→CLASSIFY→CONTEXT→PLAN→POLICY→EXECUTE→         │
    │               VERIFY→REFLECT→COMMIT                                │
    │  POLICY       deterministic R0–R4, outside the model               │
+   │  LLM ROUTER   Groq → Gemini → OpenRouter, budget-capped            │
    └────────────────────────────────────────────────────────────────────┘
-        │                      │                        │
-   Postgres+pgvector    Cloudflare R2            Outbound WSS
-   goals · tasks        evidence blobs                  │
-   approvals · jobs                              MAC NODE (your Mac)
-   evidence · audit                              PyObjC tools · Ollama
-                                                 verifier · kill switch
+        │                    │                    │              │
+  Postgres+pgvector   Cloudflare R2      Headless Playwright   Outbound WSS
+  goals · tasks       evidence blobs     DOM evidence                │
+  approvals · jobs                       (cloud-side)          MAC NODE
+  memories · graph                                             PyObjC tools
+  audit · llm_calls                                            verifier · STOP
 ```
 
-**Four planes.** *Experience* owns UI, voice and approval — never credentials. *Control* owns identity,
-state, policy and audit — never GUI manipulation. *Execution* owns typed connectors and paired local tools —
-never its own permissions. *Evidence* owns read-after-write verification — and never treats model confidence
-as proof.
+**Four planes.** *Experience* owns UI, voice and approval — never credentials. *Control* owns identity, state,
+policy and audit — never GUI manipulation. *Execution* owns typed connectors and paired local tools — never
+its own permissions. *Evidence* owns read-after-write verification — and never treats model confidence as proof.
 
 **The Mac opens only an outbound connection.** No public port. No raw shell endpoint. Ever.
 
@@ -76,31 +78,61 @@ Full detail: **[PLAN.md](PLAN.md)** · **[docs/ARCHITECTURE.md](docs/ARCHITECTUR
 
 ---
 
-## Stack
+## Cloud-first: the Mac is optional
 
-Chosen for capability first and cost second — **target run cost under $2/month.**
+| Tier | Capability | Mac needed? |
+|---|---|---|
+| **A — always on** | Ingestion, extraction, goal engine, **failure prediction**, scheduling, escalation, approvals, memory, knowledge graph, audit, Telegram / WhatsApp / call / Alexa / Android, **browser automation + DOM evidence** | ❌ No |
+| **B — Mac only** | `mac.open_app`, `mac.focus`, AX UI automation, window/screen evidence, local files, wake-word voice | ✅ Yes |
+
+The browser worker runs **headless Playwright in the cloud**, so "execute → verify with real DOM evidence" —
+the demo's proof-of-work moment — survives the Mac being off. When a Tier-B action is requested while the Mac
+is offline it is queued with an expiry, and **never silently executed once stale**: on reconnect it is offered
+for explicit review.
+
+---
+
+## Stack
 
 | Layer | Technology |
 |---|---|
 | Backend | Python 3.12 · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Alembic |
-| Database | PostgreSQL 16 + `pgvector` (Neon free tier) |
+| Database | PostgreSQL 16 + `pgvector`, co-located with the API |
 | Queue | Postgres `FOR UPDATE SKIP LOCKED` — replaces SQS |
 | Scheduler | `schedules` table + 30 s tick — replaces EventBridge Scheduler |
 | Approvals | Payload-hashed DB rows — replaces Step Functions callback tokens |
-| Auth | Self-issued JWT + Argon2id, behind an `IdentityProvider` interface |
+| Auth | Authlib OAuth2 server + JWT + Argon2id (Alexa account linking needs a real OAuth2 grant) |
 | Realtime | FastAPI native WebSocket |
-| Chat / planning LLM | **Ollama on your Mac**, relayed over the device WebSocket — $0 |
-| Extraction LLM | Claude Haiku 4.5, strict JSON, hard budget cap — ~$1/mo |
-| Embeddings | `all-MiniLM-L6-v2` local, 384-d |
-| Mac automation | **Python + PyObjC** — `NSWorkspace`, `AXUIElement`, `CGWindowList` |
-| Clients | Flutter (macOS + Android) · Telegram |
-| Hosting | Oracle Cloud Always Free ARM VM · Docker Compose · Caddy |
+| **LLM** | **Groq** (chat/plan/classify) → **Gemini** (extraction, JSON-schema mode) → **OpenRouter** (overflow + paid fallback), cascading on rate limits, hard budget cap |
+| Embeddings | `all-MiniLM-L6-v2` on the VPS, CPU, 384-d |
+| Browser | Headless Playwright, cloud-side |
+| Mac automation | Python + PyObjC — `NSWorkspace`, `AXUIElement`, `CGWindowList` |
+| Clients | Flutter (macOS + Android) · Telegram · WhatsApp · Alexa |
+| Hosting | Oracle Cloud Always Free ARM · Docker Compose · Caddy |
 
-**Inference costs nothing** because the Mac node advertises `llm.generate` as a tool over the socket it
-already holds open. The cloud VM has no GPU and never needs one. With `ENABLE_PAID_LLM=false` the entire
-system still works — only extraction gets weaker. That is a test, not a claim.
+No single LLM provider's rate limit can stop the system: the router cascades on 429, trips a circuit breaker
+per provider, and accounts for every call in `llm_calls`. With `ENABLE_PAID_LLM=false` the whole system still
+works on free tiers alone — and that is a test, not a claim.
 
-**No iOS.** No APNs, no TestFlight, no ActivityKit. Android only.
+**No iOS.** No APNs, no TestFlight, no ActivityKit — the Android ongoing notification and Glance widget carry
+the live deadline card. Contracts stay iOS-ready.
+
+---
+
+## Cost
+
+**Envelope ₹2,000/month. Expected spend ₹0–700.** Against roughly ₹11,000–15,000/month for the blueprint's
+AWS topology. Every substitution maps 1:1 back to its AWS service, so migrating later is a Compose swap plus a
+CDK stack rather than a rewrite. See [docs/COST.md](docs/COST.md).
+
+---
+
+## Feature coverage
+
+**Every feature in the source blueprint ships.** [PLAN.md §2](PLAN.md) maps all 34 sections of the PDF to
+where each one is implemented. Two items are *not* built, both because the blueprint itself says so:
+multi-agent orchestration (*"deferred until single-agent contracts are reliable"*) and arbitrary GUI/terminal
+autonomy (*"do not build"*). iOS is deferred by choice.
 
 ---
 
@@ -112,51 +144,53 @@ JARVIS-X/
 ├── docs/                    architecture · cost · threat model · demo runbook
 ├── legacy/jarvis-v1/        v1 source, read-only reference
 ├── packages/
-│   ├── contracts/           ⚠ SOURCE OF TRUTH — schemas + OpenAPI
+│   ├── contracts/           ⚠ SOURCE OF TRUTH — schemas · OpenAPI · tool manifests
 │   └── policy/              risk rules as data + test vectors
 ├── apps/
-│   ├── api/jarvis/          FastAPI + agent core + workers + connectors
+│   ├── api/jarvis/          FastAPI · agent core · services · connectors · llm · workers
 │   ├── mac-node/            PyObjC automation helper
 │   ├── control_center/      Flutter macOS
 │   ├── mobile/              Flutter Android
-│   └── alexa-skill/         phase 3
+│   └── alexa-skill/         TypeScript ASK SDK Lambda
 ├── migrations/              Alembic
-├── infra/                   compose · caddy · deploy scripts
+├── infra/                   compose · caddy · deploy
 ├── scripts/                 bootstrap · seed · demo reset
-└── tests/                   unit · integration · e2e · adversarial · fixtures
+└── tests/                   unit · integration · e2e · adversarial · chaos · fixtures
 ```
 
 ---
 
 ## Status
 
-🚧 **Phase 0 — Foundation.** Structure and plan committed; implementation starting.
+🚧 **Phase 0 — Foundation.** Plan and structure committed; implementation starting.
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | Contracts · DB · auth · job queue | 🚧 In progress |
-| 1 | **Vertical slice**: deadline → task → prediction → approval → verified Mac action | ⬜ Next |
-| 2 | Gmail · extraction · Android · macOS · escalation · memory | ⬜ |
-| 3 | Adversarial · chaos · metrics · Alexa · knowledge graph · demo | ⬜ |
+| 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | 🚧 |
+| 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | ⬜ |
+| 2 | Gmail · Calendar · extraction · Android · push · escalation · memory | ⬜ |
+| 3 | Flutter macOS · Mac tool set · live deadline card · knowledge graph · voice | ⬜ |
+| 4 | Alexa skill · account linking · reminders · certification | ⬜ |
+| 5 | Slack · Classroom · Canvas · WhatsApp · calls · OpenClaw | ⬜ |
+| 6 | Adversarial · chaos · metrics · CI/CD · demo | ⬜ |
 
-Phases end on **exit tests**, not calendar dates. See [PLAN.md §9](PLAN.md).
+Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 
 ---
 
 ## Getting started
 
-**Prerequisites** — do these first, they are the long poles:
+**Free accounts to create first (~20 minutes):** [Groq](https://console.groq.com) ·
+[Google AI Studio](https://aistudio.google.com) · [OpenRouter](https://openrouter.ai) ·
+[Oracle Cloud](https://cloud.oracle.com) · [Cloudflare R2](https://dash.cloudflare.com) ·
+`@BotFather` on Telegram.
 
 ```bash
-brew install ollama && ollama pull llama3.1:8b   # local inference
 uv python pin 3.12                                # 3.14 has no ML wheels yet
-xcode-select --install                            # + full Xcode for Flutter macOS
-```
+xcode-select --install                            # + full Xcode, needed for Flutter macOS (phase 3)
+brew install ollama && ollama pull llama3.1:8b    # optional — local dev only, never required
 
-**Run the stack:**
-
-```bash
-docker compose -f infra/compose/docker-compose.dev.yml up -d   # Postgres + pgvector
+docker compose -f infra/compose/docker-compose.dev.yml up -d
 uv sync
 uv run alembic upgrade head
 uv run uvicorn jarvis.main:app --reload
@@ -175,10 +209,10 @@ uv run uvicorn jarvis.main:app --reload
 | **R4** prohibited | payment, credential export, disabling audit, **any command originating in an email** | denied |
 
 - Retrieved email, Slack and web text is **untrusted data**. It can propose no tool call and cannot change policy.
-- Approvals are bound to `SHA-256(tool + args + user + device + expiry)`. Edit it and it is a new proposal.
+- Approvals bind to `SHA-256(tool + args + user + device + expiry)`. Edit it and it becomes a new proposal.
 - **Simulation mode** runs planning, policy and verification with effectful tools swapped for simulators —
   then executes the *same hashed plan* on demand.
-- Three kill switches: server flag, Mac menu-bar STOP, Android session revoke. None of them delete evidence.
+- Three kill switches: server flag, Mac menu-bar STOP, Android session revoke. None delete evidence.
 
 See [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 

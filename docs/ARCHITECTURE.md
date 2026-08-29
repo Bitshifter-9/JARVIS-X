@@ -147,6 +147,66 @@ PyObjC reaches the same Apple APIs Swift would, without requiring Xcode.
 `CGWindowListCopyWindowInfo` query reports the expected bundle id frontmost and `NSRunningApplication`
 confirms the pid. A tool that returned `0` but changed nothing is a failure.
 
+## Availability tiers — the Mac is optional
+
+The system is cloud-resident. The Mac is an execution node, never a dependency.
+
+| Tier | Capability | Mac needed? |
+|---|---|---|
+| **A — always on** | Ingestion, extraction, goal engine, failure prediction, scheduling, escalation, approvals, memory, knowledge graph, audit, Telegram / WhatsApp / call / Alexa / Android, **browser automation + DOM evidence** | ❌ |
+| **B — Mac only** | `mac.open_app`, `mac.focus`, AX UI automation, window/screen evidence, local files, wake-word voice | ✅ |
+
+The planner reads live device state. With the Mac offline it **prefers a cloud path where one exists** — a
+browser tab rather than a native app — instead of proposing an action it cannot run. A Tier-B action requested
+while the Mac is offline is queued with an `expires_at`; on reconnect it is offered for explicit review unless
+the action is safe, recent, and policy permits delayed execution. Stale intent is never silently executed.
+
+## LLM routing
+
+Inference is cloud-side and multi-provider, so no single rate limit can stop the system.
+
+```python
+CASCADE = {
+  "classify": ["groq", "gemini", "openrouter_free", "openrouter_paid"],
+  "plan":     ["groq", "gemini", "openrouter_free", "openrouter_paid"],
+  "extract":  ["gemini", "groq_json", "openrouter_paid"],   # accuracy first
+  "chat":     ["groq", "gemini", "openrouter_free"],
+  "embed":    ["local_minilm"],                              # on the VPS, CPU
+}
+```
+
+| Provider | Role | Why |
+|---|---|---|
+| Groq | classify · plan · reflect · chat | Fastest free inference available. Latency is what makes the demo feel alive. |
+| Gemini | **deadline extraction** | Native JSON-schema output. Extraction is the graded 90% metric — correctness beats speed here. |
+| OpenRouter | overflow, then paid fallback | One key, many models. `:free` variants first; paid credit only when free tiers are exhausted *and* budget remains. |
+| Ollama (Mac) | optional local dev | Zero-cost dev and a genuine offline story — never required. |
+
+**Mechanics.** A 429 or quota exhaustion advances the cascade. Each provider has a token bucket and a circuit
+breaker, with cooldowns tracked in `provider_health`. Every call is budget-checked *before* dispatch and
+recorded in `llm_calls` with provider, model, prompt version, token counts and cost estimate.
+
+`ENABLE_PAID_LLM=false` must yield a fully working system on free tiers alone. There is a test asserting it.
+
+**Embeddings never leave the VPS.** `all-MiniLM-L6-v2` is 22M parameters and comfortable on CPU — 384-d
+vectors, no rate limit, no cost, no third party holding your memory corpus.
+
+## Cloud execution: the browser worker
+
+Headless Playwright runs on the VPS, in the worker entrypoint. This is what keeps the *verified execution*
+story alive when the Mac is off.
+
+| Step | Evidence produced |
+|---|---|
+| `browser.navigate(url)` | final URL after redirects, page title, HTTP status |
+| `browser.act(selector, …)` | pre/post DOM snapshot digest, element accessibility name |
+| `browser.extract(schema)` | extracted values + the DOM path each came from |
+| verification | URL/title match, expected selector present, screenshot digest → R2 |
+
+The browser runs in its own profile with no logged-in personal session by default; a connector supplies scoped
+credentials only for the site it owns. Same rule as everywhere else — retrieved page text is **untrusted data**
+and can propose no tool call.
+
 ## Memory
 
 | Tier | Stores | Retention | Retrieval |
