@@ -1,0 +1,856 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   J.A.R.V.I.S — Iron Man HUD UI
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* ─── CSS Variables ──────────────────────────────────────────────────── */
+:root {
+  --bg-primary: #030a14;
+  --bg-hud: rgba(8, 20, 40, 0.85);
+  --hud-cyan: #00e5ff;
+  --hud-cyan-dim: rgba(0, 229, 255, 0.12);
+  --hud-gold: #ffab00;
+  --hud-gold-dim: rgba(255, 171, 0, 0.1);
+  --hud-blue: #1e88e5;
+  --hud-red: #ff3d00;
+  --hud-red-dim: rgba(255, 61, 0, 0.15);
+  --arc-core: #4fc3f7;
+  --arc-glow: rgba(79, 195, 247, 0.5);
+  --arc-ring: rgba(0, 229, 255, 0.25);
+  --text-primary: #b0d4f1;
+  --text-bright: #e0f0ff;
+  --text-dim: #4a6a8a;
+  --font-hud: 'Orbitron', monospace;
+  --font-body: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Background: HUD grid + radial glow ─────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0, 229, 255, 0.06) 0%, transparent 65%),
+    radial-gradient(ellipse at 50% 100%, rgba(255, 171, 0, 0.03) 0%, transparent 50%);
+  z-index: -2;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+  z-index: -1;
+  animation: grid-scroll 20s linear infinite;
+}
+
+@keyframes grid-scroll {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(50px);
+  }
+}
+
+/* ─── App Container ──────────────────────────────────────────────────── */
+.app-container {
+  width: 100%;
+  max-width: 520px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 10px;
+  position: relative;
+}
+
+/* ─── HUD Corner Decorations ─────────────────────────────────────────── */
+.hud-corner {
+  position: fixed;
+  width: 60px;
+  height: 60px;
+  border-color: rgba(0, 229, 255, 0.2);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+
+.hud-corner.tl {
+  top: 8px;
+  left: 8px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.hud-corner.tr {
+  top: 8px;
+  right: 8px;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.hud-corner.bl {
+  bottom: 8px;
+  left: 8px;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.hud-corner.br {
+  bottom: 8px;
+  right: 8px;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────── */
+.header {
+  text-align: center;
+  padding: 10px 0 4px;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-family: var(--font-hud);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 10px;
+  text-transform: uppercase;
+  color: var(--hud-cyan);
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.4), 0 0 60px rgba(0, 229, 255, 0.15);
+}
+
+.hud-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  margin-top: 2px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: var(--transition);
+}
+
+.status-dot.active {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 10px var(--hud-cyan), 0 0 20px rgba(0, 229, 255, 0.3);
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.status-text {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transition: var(--transition);
+}
+
+.status-text.active {
+  color: var(--hud-cyan);
+}
+
+/* ─── Arc Reactor Orb ────────────────────────────────────────────────── */
+.orb-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.arc-reactor {
+  position: relative;
+  width: 140px;
+  height: 140px;
+}
+
+/* Outer spinning ring */
+.arc-reactor .ring-outer {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--arc-ring);
+  border-top-color: var(--hud-cyan);
+  animation: spin 8s linear infinite;
+}
+
+.arc-reactor .ring-mid {
+  position: absolute;
+  inset: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-bottom-color: rgba(255, 171, 0, 0.4);
+  animation: spin 5s linear infinite reverse;
+}
+
+.arc-reactor .ring-inner {
+  position: absolute;
+  inset: 24px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 229, 255, 0.12);
+  animation: spin 12s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Core */
+.arc-reactor .core {
+  position: absolute;
+  inset: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%,
+      rgba(79, 195, 247, 0.6),
+      rgba(0, 229, 255, 0.3) 40%,
+      rgba(30, 136, 229, 0.15) 70%,
+      transparent 100%);
+  box-shadow:
+    0 0 30px var(--arc-glow),
+    0 0 60px rgba(0, 229, 255, 0.15),
+    inset 0 0 20px rgba(79, 195, 247, 0.3);
+  animation: core-breathe 3s ease-in-out infinite;
+}
+
+@keyframes core-breathe {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+
+/* Core dot */
+.arc-reactor .core::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px #fff, 0 0 20px var(--hud-cyan);
+  animation: core-dot 2s ease-in-out infinite;
+}
+
+@keyframes core-dot {
+
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ─── Arc Reactor States ─────────────────────────────────────────────── */
+.arc-reactor.listening .core {
+  background: radial-gradient(circle at 40% 40%,
+      rgba(0, 229, 255, 0.8),
+      rgba(79, 195, 247, 0.5) 40%,
+      rgba(30, 136, 229, 0.3) 70%,
+      transparent 100%);
+  box-shadow:
+    0 0 50px rgba(0, 229, 255, 0.5),
+    0 0 100px rgba(0, 229, 255, 0.2),
+    inset 0 0 30px rgba(79, 195, 247, 0.4);
+  animation: core-listen 0.8s ease-in-out infinite;
+}
+
+@keyframes core-listen {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.arc-reactor.listening .ring-outer {
+  border-top-color: var(--hud-cyan);
+  border-right-color: var(--hud-cyan);
+  animation-duration: 2s;
+}
+
+.arc-reactor.thinking .core {
+  background: radial-gradient(circle at 40% 40%,
+      rgba(255, 171, 0, 0.6),
+      rgba(255, 193, 7, 0.3) 40%,
+      rgba(255, 111, 0, 0.15) 70%,
+      transparent 100%);
+  box-shadow:
+    0 0 40px rgba(255, 171, 0, 0.4),
+    0 0 80px rgba(255, 171, 0, 0.15),
+    inset 0 0 25px rgba(255, 193, 7, 0.3);
+  animation: core-think 1.5s linear infinite;
+}
+
+@keyframes core-think {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  50% {
+    transform: scale(1.05) rotate(180deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+.arc-reactor.thinking .ring-outer {
+  animation-duration: 1s;
+}
+
+.arc-reactor.thinking .ring-mid {
+  animation-duration: 0.7s;
+}
+
+.arc-reactor.speaking .core {
+  background: radial-gradient(circle at 40% 40%,
+      rgba(0, 230, 118, 0.6),
+      rgba(0, 200, 83, 0.35) 40%,
+      rgba(0, 150, 60, 0.15) 70%,
+      transparent 100%);
+  box-shadow:
+    0 0 40px rgba(0, 230, 118, 0.4),
+    0 0 80px rgba(0, 230, 118, 0.15),
+    inset 0 0 25px rgba(0, 230, 118, 0.3);
+  animation: core-speak 0.5s ease-in-out infinite;
+}
+
+@keyframes core-speak {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* ─── HUD Data Lines (decorative) ────────────────────────────────────── */
+.hud-data {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.hud-data span {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+/* ─── Chat Panel ─────────────────────────────────────────────────────── */
+.chat-panel {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-hud);
+  border: 1px solid rgba(0, 229, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Scanline overlay */
+.chat-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 229, 255, 0.008) 2px,
+      rgba(0, 229, 255, 0.008) 4px);
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.2);
+  border-radius: 3px;
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────── */
+.message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  font-weight: 400;
+  animation: msg-in 0.3s ease-out;
+  word-wrap: break-word;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message.user {
+  align-self: flex-end;
+  background: rgba(30, 136, 229, 0.12);
+  border: 1px solid rgba(30, 136, 229, 0.25);
+  color: #90caf9;
+}
+
+.message.jarvis {
+  align-self: flex-start;
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  color: var(--text-bright);
+}
+
+.message.tool {
+  align-self: flex-start;
+  background: var(--hud-gold-dim);
+  border: 1px solid rgba(255, 171, 0, 0.2);
+  color: #ffd54f;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.message .label {
+  display: block;
+  font-family: var(--font-hud);
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: 0.5;
+}
+
+.message.user .label {
+  color: var(--hud-blue);
+}
+
+.message.jarvis .label {
+  color: var(--hud-cyan);
+}
+
+.message.tool .label {
+  color: var(--hud-gold);
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--hud-cyan);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 0.6s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ─── Welcome ────────────────────────────────────────────────────────── */
+.welcome {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.welcome .greeting {
+  font-family: var(--font-hud);
+  font-size: 0.75rem;
+  letter-spacing: 4px;
+  color: var(--hud-cyan);
+  opacity: 0.6;
+  margin-bottom: 8px;
+}
+
+.welcome .sub {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+/* ─── Bottom Controls ────────────────────────────────────────────────── */
+.controls-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px;
+  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  flex-shrink: 0;
+}
+
+/* ─── Voice Mode (default) ───────────────────────────────────────────── */
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  justify-content: center;
+}
+
+.mic-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.06);
+  color: var(--hud-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+}
+
+.mic-btn::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 229, 255, 0.1);
+  transition: var(--transition);
+}
+
+.mic-btn:hover {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.mic-btn:active {
+  transform: scale(0.95);
+}
+
+.mic-btn.recording {
+  background: rgba(255, 61, 0, 0.15);
+  border-color: rgba(255, 61, 0, 0.6);
+  color: var(--hud-red);
+  animation: rec-glow 1s ease-in-out infinite;
+}
+
+.mic-btn.recording::before {
+  border-color: rgba(255, 61, 0, 0.3);
+  animation: rec-ring 1s ease-in-out infinite;
+}
+
+@keyframes rec-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(255, 61, 0, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 30px rgba(255, 61, 0, 0.4);
+  }
+}
+
+@keyframes rec-ring {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+}
+
+.mic-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Always-listening active state */
+.mic-btn.active-listening {
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--hud-cyan);
+  animation: listen-glow 2s ease-in-out infinite;
+}
+
+.mic-btn.active-listening::before {
+  border-color: rgba(0, 229, 255, 0.25);
+  animation: listen-ring 2s ease-in-out infinite;
+}
+
+@keyframes listen-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 15px rgba(0, 229, 255, 0.15);
+  }
+
+  50% {
+    box-shadow: 0 0 30px rgba(0, 229, 255, 0.35);
+  }
+}
+
+@keyframes listen-ring {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+/* Paused state */
+.mic-btn.paused {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+  animation: none;
+}
+
+.mic-btn.paused::before {
+  border-color: rgba(255, 255, 255, 0.05);
+  animation: none;
+}
+
+.mic-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* Mode toggle buttons */
+.mode-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  background: rgba(0, 229, 255, 0.04);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.mode-toggle:hover {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.3);
+  color: var(--hud-cyan);
+}
+
+.mode-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ─── Text Mode ──────────────────────────────────────────────────────── */
+.text-controls {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.text-controls.active {
+  display: flex;
+}
+
+.voice-controls.hidden {
+  display: none;
+}
+
+.text-controls input {
+  flex: 1;
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px solid rgba(0, 229, 255, 0.12);
+  border-radius: 20px;
+  padding: 10px 16px;
+  color: var(--text-bright);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 400;
+  outline: none;
+  transition: var(--transition);
+}
+
+.text-controls input::placeholder {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.text-controls input:focus {
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.06);
+}
+
+.btn-send {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--hud-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-send:hover {
+  background: rgba(0, 229, 255, 0.15);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.15);
+}
+
+.btn-send svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 560px) {
+  .app-container {
+    padding: 6px 8px 6px;
+    max-width: 100%;
+  }
+
+  .header h1 {
+    font-size: 1.4rem;
+    letter-spacing: 6px;
+  }
+
+  .arc-reactor {
+    width: 110px;
+    height: 110px;
+  }
+
+  .hud-corner {
+    width: 40px;
+    height: 40px;
+  }
+}

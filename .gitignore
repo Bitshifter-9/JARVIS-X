@@ -1,0 +1,74 @@
+# ── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── Secrets — NEVER commit ─────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/public*.key
+client_secret*.json
+credentials.json
+token.json
+*.tfvars
+
+# ── Models & large binaries (re-download, don't commit) ─
+voices/
+*.onnx
+*.onnx.json
+*.gguf
+*.bin
+*.wav
+*.mp3
+models/
+
+# ── Evidence & runtime artifacts ───────────────────────
+evidence/
+screenshots/
+*.sqlite
+*.db
+chroma/
+logs/
+*.log
+
+# ── Flutter / Dart ─────────────────────────────────────
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.pub-cache/
+.pub/
+**/ios/
+**/Pods/
+
+# ── Node (Alexa skill) ─────────────────────────────────
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ── macOS ──────────────────────────────────────────────
+.DS_Store
+*.app/
+*.dmg
+*.icns
+
+# ── Editors ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+
+# ── Infra ──────────────────────────────────────────────
+.terraform/
+docker-compose.override.yml

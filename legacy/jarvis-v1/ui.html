@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Jarvis</title>
+</head>
+<body>
+  <h2>Jarvis Assistant</h2>
+
+  <input id="msg" type="text" placeholder="Type message..." size="50">
+  <button onclick="send()">Send</button>
+
+  <pre id="chat"></pre>
+
+  <script>
+    async function send() {
+      let text = document.getElementById("msg").value;
+
+      let res = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({message: text})
+      });
+
+      let data = await res.json();
+      document.getElementById("chat").textContent +=
+        "\nYou: " + text + "\nJarvis: " + data.reply + "\n";
+    }
+  </script>
+</body>
+</html>

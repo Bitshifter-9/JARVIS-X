@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>J.A.R.V.I.S — AI Assistant</title>
+  <meta name="description" content="J.A.R.V.I.S — Your personal AI voice assistant." />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+
+<body>
+
+  <!-- HUD Corner Brackets -->
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="hud-corner bl"></div>
+  <div class="hud-corner br"></div>
+
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="header">
+      <h1>J.A.R.V.I.S</h1>
+      <div class="hud-subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+      <div class="status-bar">
+        <span class="status-dot active" id="statusDot"></span>
+        <span class="status-text active" id="statusText">SYSTEM ONLINE</span>
+      </div>
+    </header>
+
+    <!-- Arc Reactor Orb -->
+    <div class="orb-section">
+      <div class="arc-reactor" id="arcReactor">
+        <div class="ring-outer"></div>
+        <div class="ring-mid"></div>
+        <div class="ring-inner"></div>
+        <div class="core"></div>
+      </div>
+    </div>
+
+    <!-- HUD Data Lines -->
+    <div class="hud-data">
+      <span>SYS: ACTIVE</span>
+      <span>MODEL: LLAMA3</span>
+      <span>MEM: LINKED</span>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="chat-panel">
+      <div class="chat-messages" id="chatMessages">
+        <div class="welcome">
+          <div class="greeting">SYSTEMS INITIALIZED</div>
+          <div class="sub">Good evening. How may I assist you?</div>
+        </div>
+      </div>
+
+      <!-- Controls Area -->
+      <div class="controls-area">
+
+        <!-- Voice Mode (DEFAULT — always listening) -->
+        <div class="voice-controls" id="voiceControls">
+          <!-- Mic on/off toggle -->
+          <button class="mic-btn active-listening" id="micToggle" title="Tap to pause/resume listening">
+            <svg id="micOnIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+            <svg id="micOffIcon" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="2" x2="22" y1="2" y2="22" />
+              <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
+              <path d="M5 10v2a7 7 0 0 0 12 5" />
+              <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33" />
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </button>
+
+          <span class="mic-label" id="micLabel">LISTENING…</span>
+
+          <!-- Switch to Text Mode -->
+          <button class="mode-toggle" id="toTextBtn" title="Switch to text input">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Text Mode (hidden by default) -->
+        <div class="text-controls" id="textControls">
+          <!-- Switch back to Voice Mode -->
+          <button class="mode-toggle" id="toVoiceBtn" title="Switch to voice input">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </button>
+
+          <input type="text" id="msgInput" placeholder="Type a message…" autocomplete="off" />
+
+          <button class="btn-send" id="sendBtn" title="Send">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" x2="11" y1="2" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
