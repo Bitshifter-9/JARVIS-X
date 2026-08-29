@@ -9,7 +9,9 @@ services:
       POSTGRES_PASSWORD: jarvis
       POSTGRES_DB: jarvis
     ports:
-      - "5432:5432"
+      # 5433 on the host: a Homebrew PostgreSQL commonly owns 5432, and silently
+      # connecting to the wrong server is a confusing failure to debug.
+      - "5433:5432"
     volumes:
       - jarvis-pgdata:/var/lib/postgresql/data
     healthcheck:

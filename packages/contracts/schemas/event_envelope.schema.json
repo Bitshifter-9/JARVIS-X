@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis-x.dev/schemas/v1/event_envelope.schema.json",
+  "title": "EventEnvelope",
+  "description": "Every event entering JARVIS X. Idempotency key is (tenant_id, source.provider, source.object_id).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "occurred_at", "tenant_id", "source", "correlation_id", "schema_version", "payload"],
+  "properties": {
+    "event_id":        { "type": "string", "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "event_type":      { "type": "string", "enum": [
+                           "source.message.changed", "task.deadline.soon", "action.approval.decided",
+                           "device.job.result", "goal.progress.changed" ] },
+    "occurred_at":     { "type": "string", "format": "date-time", "description": "UTC, RFC 3339" },
+    "tenant_id":       { "type": "string", "format": "uuid" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "object_id"],
+      "properties": {
+        "provider":  { "type": "string", "enum": [
+                         "gmail", "gcal", "slack", "classroom", "canvas", "telegram",
+                         "whatsapp", "alexa", "device", "internal" ] },
+        "object_id": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "account_id":{ "type": ["string", "null"], "format": "uuid" }
+      }
+    },
+    "correlation_id":  { "type": "string", "pattern": "^cor_[0-9A-HJKMNP-TV-Z]{26}$",
+                         "description": "Follows one request across all nine hops. Never regenerated downstream." },
+    "causation_id":    { "type": ["string", "null"], "pattern": "^evt_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "schema_version":  { "type": "integer", "minimum": 1 },
+    "trust":           { "type": "string", "enum": ["trusted", "untrusted"], "default": "untrusted",
+                         "description": "Provider-retrieved content is untrusted: it can propose no tool call and cannot change policy." },
+    "payload":         { "type": "object" }
+  }
+}

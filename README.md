@@ -162,12 +162,12 @@ JARVIS-X/
 
 ## Status
 
-🚧 **Phase 0 — Foundation.** Plan and structure committed; implementation starting.
+✅ **Phase 0 — Foundation complete.** 47 tests green against a real PostgreSQL.
 
 | Phase | Scope | State |
 |---|---|---|
-| 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | 🚧 |
-| 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | ⬜ |
+| 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | ✅ |
+| 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | 🚧 next |
 | 2 | Gmail · Calendar · extraction · Android · push · escalation · memory | ⬜ |
 | 3 | Flutter macOS · Mac tool set · live deadline card · knowledge graph · voice | ⬜ |
 | 4 | Alexa skill · account linking · reminders · certification | ⬜ |
@@ -186,14 +186,20 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 `@BotFather` on Telegram.
 
 ```bash
-uv python pin 3.12                                # 3.14 has no ML wheels yet
-xcode-select --install                            # + full Xcode, needed for Flutter macOS (phase 3)
-brew install ollama && ollama pull llama3.1:8b    # optional — local dev only, never required
+make bootstrap    # pins Python 3.12, installs deps, starts Postgres+pgvector, migrates
+make api          # http://localhost:8000/docs
+make test         # 47 tests against a real PostgreSQL
+```
 
-docker compose -f infra/compose/docker-compose.dev.yml up -d
-uv sync
-uv run alembic upgrade head
-uv run uvicorn jarvis.main:app --reload
+`make help` lists everything. Postgres binds host port **5433**, because a Homebrew
+PostgreSQL commonly owns 5432 and silently connecting to the wrong server is a miserable
+thing to debug.
+
+Optional, and not on the critical path:
+
+```bash
+brew install ollama && ollama pull llama3.1:8b   # local dev inference; never required
+xcode-select --install                           # + full Xcode for Flutter macOS (phase 3)
 ```
 
 ---

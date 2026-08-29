@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis-x.dev/schemas/v1/goal.schema.json",
+  "title": "Goal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "user_id", "title", "priority", "status", "version"],
+  "properties": {
+    "id":            { "type": "string", "format": "uuid" },
+    "user_id":       { "type": "string", "format": "uuid" },
+    "title":         { "type": "string", "minLength": 1, "maxLength": 500 },
+    "outcome":       { "type": ["string", "null"], "maxLength": 2000 },
+    "deadline":      { "type": ["string", "null"], "format": "date-time" },
+    "timezone":      { "type": ["string", "null"], "description": "IANA name. Stored beside the UTC deadline; reminders are computed from the pair." },
+    "priority":      { "type": "integer", "minimum": 0, "maximum": 4 },
+    "status":        { "type": "string", "enum": ["active", "paused", "achieved", "missed", "abandoned"] },
+    "success_metric":{ "type": ["object", "null"] },
+    "version":       { "type": "integer", "minimum": 1 }
+  }
+}

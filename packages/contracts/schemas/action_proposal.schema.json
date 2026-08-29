@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis-x.dev/schemas/v1/action_proposal.schema.json",
+  "title": "ActionProposal",
+  "description": "The agent proposes; policy decides; the executor revalidates independently before dispatch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action_id", "tool", "args", "expected", "risk", "idempotency_key", "expires_at"],
+  "properties": {
+    "action_id":       { "type": "string", "format": "uuid" },
+    "run_id":          { "type": ["string", "null"], "format": "uuid" },
+    "tool":            { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                         "description": "Namespaced, e.g. mac.open_app, browser.navigate, gmail.create_draft, message.send." },
+    "args":            { "type": "object" },
+    "expected":        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/EvidenceRequirement" },
+                         "description": "At least one requirement. An action with no expected evidence cannot be verified, so it is not allowed." },
+    "risk":            { "type": "string", "enum": ["R0", "R1", "R2", "R3", "R4"] },
+    "idempotency_key": { "type": "string", "minLength": 8, "maxLength": 255 },
+    "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 300, "default": 30 },
+    "expires_at":      { "type": "string", "format": "date-time" },
+    "simulate":        { "type": "boolean", "default": false,
+                         "description": "Run planning, policy and verification preconditions with effectful tools swapped for simulators." },
+    "rationale":       { "type": ["string", "null"], "maxLength": 1000 }
+  },
+  "$defs": {
+    "EvidenceRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind":  { "type": "string", "enum": [
+                     "process_running", "foreground_window_bundle_id", "window_title_matches",
+                     "dom_url_matches", "dom_selector_present", "provider_object_id",
+                     "http_status", "file_exists", "screenshot" ] },
+        "value": { "description": "Expected value, kind-dependent." }
+      }
+    }
+  }
+}

@@ -392,16 +392,16 @@ reports the expected bundle id frontmost *and* `NSRunningApplication` confirms t
 
 Phases end on **exit tests**, not calendar dates.
 
-### Phase 0 — Foundation
+### Phase 0 — Foundation ✅ complete — 47 tests green
 
 | # | Task | Exit test |
 |---|---|---|
-| 0.1 | Freeze five contracts: `EventEnvelope`, `Goal`, `Task`, `ActionProposal`, `Evidence` | One schema generates Dart + Python + TS |
-| 0.2 | Compose Postgres 16 + pgvector; Alembic 0001 | Integration tests green on a clean DB |
-| 0.3 | FastAPI skeleton, JSON logging, `correlation_id` middleware, RFC-9457 errors | `/healthz` returns build SHA; every log line carries a correlation id |
-| 0.4 | OAuth2 authorization server + JWT + Argon2id | Register → authorize → token → refresh → revoke |
-| 0.5 | `jobs` queue: `SKIP LOCKED`, retry, backoff, DLQ | 100 jobs / 4 workers: zero double-processing, poison job dead-letters |
-| 0.6 | **LLM router**: Groq + Gemini + OpenRouter, cascade, budget guard, `llm_calls` accounting | Kill the primary provider mid-run → the run completes on the next tier |
+| 0.1 | ✅ Freeze five contracts: `EventEnvelope`, `Goal`, `Task`, `ActionProposal`, `Evidence` | Frozen in `packages/contracts/schemas/`, all valid JSON Schema 2020-12 |
+| 0.2 | ✅ Compose Postgres 16 + pgvector; Alembic 0001 | Postgres 16.15 + pgvector 0.8.6; migration applies on a clean DB |
+| 0.3 | ✅ FastAPI skeleton, JSON logging, `correlation_id` middleware, RFC-9457 errors | `/healthz` returns build SHA; correlation id on every response and log line |
+| 0.4 | ✅ OAuth2 authorization server + JWT + Argon2id | Register → authorize → token → refresh → revoke, with PKCE and single-use codes |
+| 0.5 | ✅ `jobs` queue: `SKIP LOCKED`, retry, backoff, DLQ | **100 jobs / 4 workers: zero double-processing; poison job dead-letters** |
+| 0.6 | ✅ **LLM router**: Groq + Gemini + OpenRouter, cascade, budget guard, `llm_calls` accounting | **Primary killed mid-run → completes on the next tier**; paid tier unreachable while disabled |
 
 > **Gate:** 0.5 and 0.6 must pass before Phase 1. Everything rides on the queue and the router.
 

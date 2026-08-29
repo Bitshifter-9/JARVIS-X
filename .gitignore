@@ -4,12 +4,13 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-.python-version
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# uv.lock IS committed on purpose: reproducible installs.
 
 # ── Secrets — NEVER commit ─────────────────────────────
 .env

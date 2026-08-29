@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis-x.dev/schemas/v1/task.schema.json",
+  "title": "Task",
+  "description": "version increments on every update; a stale schedule fire reads the current version and exits without alerting.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "user_id", "title", "status", "priority", "version"],
+  "properties": {
+    "id":                { "type": "string", "format": "uuid" },
+    "user_id":           { "type": "string", "format": "uuid" },
+    "goal_id":           { "type": ["string", "null"], "format": "uuid" },
+    "title":             { "type": "string", "minLength": 1, "maxLength": 500 },
+    "status":            { "type": "string", "enum": ["open", "in_progress", "blocked", "done", "cancelled"] },
+    "due_at":            { "type": ["string", "null"], "format": "date-time",
+                           "description": "Confirmed UTC instant. NEVER raw extracted text." },
+    "timezone":          { "type": ["string", "null"], "description": "IANA name accompanying due_at." },
+    "estimate_minutes":  { "type": ["integer", "null"], "minimum": 0 },
+    "remaining_minutes": { "type": ["integer", "null"], "minimum": 0 },
+    "earliest_start":    { "type": ["string", "null"], "format": "date-time" },
+    "priority":          { "type": "integer", "minimum": 0, "maximum": 4 },
+    "depends_on":        { "type": "array", "items": { "type": "string", "format": "uuid" } },
+    "source_id":         { "type": ["string", "null"], "format": "uuid" },
+    "confidence":        { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "evidence_span":     { "type": ["string", "null"], "maxLength": 2000,
+                           "description": "The exact source substring the deadline was read from. Enables 'why do you believe this?'." },
+    "version":           { "type": "integer", "minimum": 1 }
+  }
+}

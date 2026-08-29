@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jarvis-x.dev/schemas/v1/evidence.schema.json",
+  "title": "Evidence",
+  "description": "Observed state after an action. Model confidence is never evidence; a zero exit code is never evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "action_id", "kind", "verdict", "observed_at"],
+  "properties": {
+    "id":          { "type": "string", "format": "uuid" },
+    "action_id":   { "type": "string", "format": "uuid" },
+    "kind":        { "type": "string", "enum": [
+                       "process_running", "foreground_window_bundle_id", "window_title_matches",
+                       "dom_url_matches", "dom_selector_present", "provider_object_id",
+                       "http_status", "file_exists", "screenshot" ] },
+    "observed":    { "description": "What was actually observed." },
+    "expected":    { "description": "What the proposal required." },
+    "verdict":     { "type": "string", "enum": ["verified", "failed", "inconclusive"] },
+    "uri":         { "type": ["string", "null"], "description": "Blob location for screenshots and DOM snapshots." },
+    "digest":      { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "redaction":   { "type": ["object", "null"], "description": "What was removed before storage, and why." },
+    "observed_at": { "type": "string", "format": "date-time" }
+  }
+}
