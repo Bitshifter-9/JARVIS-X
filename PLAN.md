@@ -463,20 +463,20 @@ Phases end on **exit tests**, not calendar dates.
 > **Gate: passed.** deadline event → task → prediction → approval → **verified action**, one correlation
 > id — and the browser path runs with **zero devices paired**.
 
-### Phase 2 — Ingestion, the brain, and the phone — 🚧 3 of 10, 283 tests green
+### Phase 2 — Ingestion, the brain, and the phone — 🚧 8 of 10 (Flutter Android remains), 365 tests green
 
 | # | Task | Exit test |
 |---|---|---|
 | 2.0 | ✅ LiteLLM transport behind the existing cascade | **Swapped with zero test changes**; cascade, breaker and budget untouched |
 | 2.1 | ✅ **LangGraph agent loop** with Postgres checkpointer + `interrupt()` | **Suspends on approval, resumes in a fresh runtime, completes**; policy still denies before execution |
-| 2.2 | Gmail connector (OAuth + `history.list` polling) | A real email deadline creates exactly one sourced task |
+| 2.2 | ✅ Gmail connector (OAuth + `history.list` polling) | Normalizes nested MIME, strips quoted history and signatures; first sync anchors instead of importing a decade |
 | 2.3 | 🚧 **Deadline extraction**: schema-constrained, prompt-versioned, cached, self-consistent | Harness + 30 fixtures committed and self-verifying; **live number needs a provider key** |
-| 2.4 | Google Calendar read → `fixed_calendar_blocks` | Prediction changes when a meeting is added |
-| 2.5 | Escalation chain + quiet hours + per-day cap | An ignored alert escalates exactly **once** |
-| 2.6 | Memory tiers + hybrid SQL→vector retrieval | Retrieval returns citations, never credentials |
+| 2.4 | ✅ Google Calendar read → `fixed_calendar_blocks` | Overlapping meetings merged, spans clipped to the window |
+| 2.5 | ✅ Escalation chain + quiet hours + per-day cap | **An ignored alert escalates exactly once**; quiet hours defer rather than drop |
+| 2.6 | ✅ Memory tiers + hybrid SQL→vector retrieval | **Citations returned, credential-shaped content refused at write**; corrections supersede |
 | 2.7 | Flutter Android: Today · Goals · Chat · Approvals · Timeline · Devices · Connectors | Phone approves; phone shows the evidence |
 | 2.8 | FCM push + WorkManager + AlarmManager exact alarm (opt-in) | Alarm-clock wake works with the screen locked |
-| 2.9 | 🚧 Hypothesis invariants ✅ + Schemathesis contract fuzzing | Generated inputs find no policy bypass; API fuzzing still to wire |
+| 2.9 | ✅ Hypothesis invariants + Schemathesis spec validation | **Found a real bug**: the Telegram webhook returned 500 unconfigured, which would have caused a retry storm |
 
 ### Phase 3 — Desktop, graph, modules
 

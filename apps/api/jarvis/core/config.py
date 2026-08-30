@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     max_run_seconds: int = 180
     max_notifications_per_day: int = 20
     max_calls_per_day: int = 3
+    quiet_hours: str = "22:30-07:00"
 
     # ── queue ──────────────────────────────────────────────────────────
     job_visibility_timeout_seconds: int = 300
@@ -74,6 +75,11 @@ class Settings(BaseSettings):
     # ── provider health ────────────────────────────────────────────────
     provider_cooldown_seconds: int = 60
     provider_failure_threshold: int = 3
+
+    # ── Google ─────────────────────────────────────────────────────────
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    gmail_poll_seconds: int = 60
 
     # ── Telegram ───────────────────────────────────────────────────────
     telegram_bot_token: str = ""

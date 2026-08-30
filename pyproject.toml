@@ -30,6 +30,10 @@ dependencies = [
     "langgraph>=1.2",
     "langgraph-checkpoint-postgres>=3.1",
     "psycopg[binary,pool]>=3.2",
+    "fastembed>=0.8",
+    "google-auth>=2.57",
+    "google-auth-oauthlib>=1.2",
+    "google-api-python-client>=2.199",
     # The Mac helper dials out over WebSocket; no inbound port is ever opened.
     "websockets>=13.0",
 ]

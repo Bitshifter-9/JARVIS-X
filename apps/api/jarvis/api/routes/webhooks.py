@@ -41,13 +41,24 @@ async def telegram_webhook(
         log.warning("telegram_webhook_bad_secret")
         return Response(status_code=status.HTTP_200_OK)
 
-    update: dict[str, Any] = await request.json()
+    try:
+        update: dict[str, Any] = await request.json()
+    except (ValueError, UnicodeDecodeError):
+        log.warning("telegram_webhook_unparseable_body")
+        return Response(status_code=status.HTTP_200_OK)
 
     from jarvis.db.session import session_scope
 
-    async with session_scope() as session:
-        service = TelegramService(session, TelegramClient(settings.telegram_bot_token))
-        outcome = await service.handle_update(update)
+    try:
+        async with session_scope() as session:
+            service = TelegramService(session, TelegramClient(settings.telegram_bot_token))
+            outcome = await service.handle_update(update)
+        log.info("telegram_update", handled=outcome.handled)
+    except Exception as exc:  # noqa: BLE001
+        # The 200 is the contract, and it holds even when we cannot answer. Anything else
+        # makes Telegram redeliver, and a redelivery loop is worse than a dropped update.
+        log.error(
+            "telegram_webhook_failed", error=str(exc)[:300], error_type=type(exc).__name__
+        )
 
-    log.info("telegram_update", handled=outcome.handled)
     return Response(status_code=status.HTTP_200_OK)
