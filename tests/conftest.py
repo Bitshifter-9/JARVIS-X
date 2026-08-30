@@ -50,19 +50,13 @@ async def _clean_tables(_schema):
     Not a per-test transaction: the concurrency tests need genuinely separate sessions
     committing against each other, which a shared outer transaction would serialize away.
     """
+    # Only our own tables. LangGraph's checkpoint tables are deliberately excluded:
+    # TRUNCATE needs ACCESS EXCLUSIVE, and the session-scoped saver holds its own psycopg
+    # pool over them, so truncating them here contends with it. Checkpoints are keyed by
+    # a fresh run id per test, so stale rows are inert rather than leaked state.
+    table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     async with get_sessionmaker()() as session:
-        # LangGraph's checkpoint tables are created by its own migrations and are not in
-        # Base.metadata, so they are discovered rather than listed. Leaving them behind
-        # leaks run state between tests.
-        rows = await session.execute(
-            text("""
-                SELECT tablename FROM pg_tables
-                WHERE schemaname = 'public' AND tablename <> 'alembic_version'
-            """)
-        )
-        names = ", ".join(f'"{r[0]}"' for r in rows)
-        if names:
-            await session.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+        await session.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
         await session.commit()
     yield
 

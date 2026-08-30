@@ -164,13 +164,13 @@ JARVIS-X/
 
 ## Status
 
-🚧 **Phase 2 — 8 of 10.** 365 tests green. Backend complete; the Flutter Android app is what remains.
+🚧 **Phase 2 — 9 of 10.** 366 Python + 11 Dart tests green. Only FCM push remains, which needs an Android build.
 
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | ✅ |
 | 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | ✅ |
-| 2 | LangGraph loop · LiteLLM · extraction · Gmail · Calendar · escalation · memory | 🚧 8/10 |
+| 2 | LangGraph loop · LiteLLM · extraction · Gmail · Calendar · escalation · memory · Flutter app | 🚧 9/10 |
 | 3 | Flutter macOS · Mac tool set · live deadline card · knowledge graph · voice | ⬜ |
 | 4 | Alexa skill · account linking · reminders · certification | ⬜ |
 | 5 | Slack · Classroom · Canvas · WhatsApp · calls · OpenClaw | ⬜ |
@@ -190,7 +190,10 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 ```bash
 make bootstrap    # pins Python 3.12, installs deps, starts Postgres+pgvector, migrates
 make api          # http://localhost:8000/docs
-make test         # 365 tests
+make seed         # demo@jarvis-x.dev / demo-password-12345
+make test         # 366 Python tests
+make mobile       # the Flutter app in Chrome
+make mobile-test  # analyze + 11 Dart tests
 make test-live    # + accuracy evals against real providers (needs keys)
 ```
 

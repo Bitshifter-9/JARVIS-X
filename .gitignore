@@ -73,3 +73,9 @@ dist/
 # ── Infra ──────────────────────────────────────────────
 .terraform/
 docker-compose.override.yml
+
+# ── Flutter build output ───────────────────────────────
+apps/mobile/build/
+apps/mobile/.dart_tool/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties

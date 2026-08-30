@@ -463,7 +463,7 @@ Phases end on **exit tests**, not calendar dates.
 > **Gate: passed.** deadline event → task → prediction → approval → **verified action**, one correlation
 > id — and the browser path runs with **zero devices paired**.
 
-### Phase 2 — Ingestion, the brain, and the phone — 🚧 8 of 10 (Flutter Android remains), 365 tests green
+### Phase 2 — Ingestion, the brain, and the phone — 🚧 9 of 10, 366 Python + 11 Dart tests green
 
 | # | Task | Exit test |
 |---|---|---|
@@ -474,8 +474,8 @@ Phases end on **exit tests**, not calendar dates.
 | 2.4 | ✅ Google Calendar read → `fixed_calendar_blocks` | Overlapping meetings merged, spans clipped to the window |
 | 2.5 | ✅ Escalation chain + quiet hours + per-day cap | **An ignored alert escalates exactly once**; quiet hours defer rather than drop |
 | 2.6 | ✅ Memory tiers + hybrid SQL→vector retrieval | **Citations returned, credential-shaped content refused at write**; corrections supersede |
-| 2.7 | Flutter Android: Today · Goals · Chat · Approvals · Timeline · Devices · Connectors | Phone approves; phone shows the evidence |
-| 2.8 | FCM push + WorkManager + AlarmManager exact alarm (opt-in) | Alarm-clock wake works with the screen locked |
+| 2.7 | ✅ Flutter app: Today · Goals · Approvals · Devices + kill switch | **Verified in a real browser**: sign-in → goals → prediction, risk card rendered from live rows. Android build needs `cmdline-tools`; web is the dev surface |
+| 2.8 | ⬜ FCM push + WorkManager + AlarmManager exact alarm | Needs an Android build first |
 | 2.9 | ✅ Hypothesis invariants + Schemathesis spec validation | **Found a real bug**: the Telegram webhook returned 500 unconfigured, which would have caused a retry storm |
 
 ### Phase 3 — Desktop, graph, modules

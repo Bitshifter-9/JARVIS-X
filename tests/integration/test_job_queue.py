@@ -207,3 +207,38 @@ async def test_backoff_is_bounded_and_jittered(attempts: int):
     samples = [_backoff_seconds(attempts) for _ in range(50)]
     assert all(0 <= v <= cap for v in samples), "backoff must never exceed the cap"
     assert len(set(samples)) > 1, "identical delays would resynchronize every worker"
+
+
+async def test_a_zero_delay_job_is_due_immediately_despite_clock_skew():
+    """The database is the only clock (see the module docstring).
+
+    App and database clocks differ by milliseconds on any real deployment — measurably so
+    between a macOS host and its Docker Postgres. If ``visible_at`` were computed from the
+    application clock, a just-enqueued job could sit briefly in the database's future and
+    be invisible to the very worker that enqueued it.
+    """
+    async with get_sessionmaker()() as s:
+        q = JobQueue(s)
+        for i in range(25):
+            await q.enqueue("t.immediate", {"i": i})
+            await s.commit()
+            claimed = await q.claim("w", limit=1)
+            await s.commit()
+            assert len(claimed) == 1, f"job {i} was not immediately claimable"
+            await q.complete(claimed[0].id)
+            await s.commit()
+
+
+async def test_visible_at_is_assigned_by_the_database():
+    async with get_sessionmaker()() as s:
+        q = JobQueue(s)
+        job = await q.enqueue("t.clock", {})
+        await s.commit()
+
+        row = (
+            await s.execute(
+                text("SELECT visible_at <= clock_timestamp() AS due FROM jobs WHERE id = :i"),
+                {"i": job.id},
+            )
+        ).mappings().one()
+        assert row["due"] is True

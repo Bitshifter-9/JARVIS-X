@@ -17,6 +17,17 @@ Dead letters         ``dead_lettered_at`` — a real DLQ, in a column.
 The claim is a single statement. Selecting then updating in two round trips would leave a
 window in which a crash loses the claim, and would double the latency of the hottest path
 in the system.
+
+Two rules about time, both learned the hard way:
+
+* Every comparison uses ``clock_timestamp()``, never ``now()``. In PostgreSQL ``now()`` is
+  ``transaction_timestamp()``, frozen at the start of the transaction, so a worker
+  claiming several batches in one transaction would never see a job enqueued after that
+  transaction began.
+* **The database is the only clock.** ``visible_at`` is computed in SQL, not in Python.
+  App and database clocks differ by milliseconds on any real deployment — and by ~4ms
+  between a macOS host and its Docker Postgres — which is enough to make a
+  just-enqueued job briefly invisible to the very worker that enqueued it.
 """
 
 from __future__ import annotations
@@ -24,10 +35,10 @@ from __future__ import annotations
 import json
 import random
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -87,7 +98,13 @@ class JobQueue:
         behaviour under at-least-once delivery, and the correct response is to do nothing.
         """
         s = get_settings()
-        visible_at = run_at or datetime.now(UTC) + timedelta(seconds=delay_seconds)
+
+        # An explicit run_at is a wall-clock instruction and is honoured as given.
+        # Otherwise the delay is applied to the *database's* clock, so a zero-delay job
+        # is due the instant it is committed rather than a few milliseconds later.
+        visible_at = run_at or (
+            func.clock_timestamp() + func.make_interval(0, 0, 0, 0, 0, 0, delay_seconds)
+        )
 
         values = {
             "id": uuid7(),
@@ -135,7 +152,7 @@ class JobQueue:
             WITH claimed AS (
                 SELECT id FROM jobs
                 WHERE status = 'pending'
-                  AND visible_at <= now()
+                  AND visible_at <= clock_timestamp()
                   AND (CAST(:kinds AS text[]) IS NULL OR kind = ANY(CAST(:kinds AS text[])))
                 ORDER BY priority DESC, visible_at ASC
                 FOR UPDATE SKIP LOCKED
@@ -144,8 +161,8 @@ class JobQueue:
             UPDATE jobs SET
                 status     = 'running',
                 locked_by  = :worker_id,
-                locked_at  = now(),
-                visible_at = now() + make_interval(secs => :visibility),
+                locked_at  = clock_timestamp(),
+                visible_at = clock_timestamp() + make_interval(secs => :visibility),
                 attempts   = jobs.attempts + 1,
                 updated_at = now()
             FROM claimed
@@ -214,7 +231,7 @@ class JobQueue:
         await self.session.execute(
             text("""
                 UPDATE jobs SET status='pending',
-                       visible_at = now() + make_interval(secs => :delay),
+                       visible_at = clock_timestamp() + make_interval(secs => :delay),
                        last_error=:err, locked_by=NULL, updated_at=now()
                 WHERE id = :id
             """),
@@ -238,7 +255,7 @@ class JobQueue:
                 UPDATE jobs SET status='pending', locked_by=NULL,
                        last_error=COALESCE(last_error, 'lease expired; worker presumed dead'),
                        updated_at=now()
-                WHERE status='running' AND visible_at <= now()
+                WHERE status='running' AND visible_at <= clock_timestamp()
                 RETURNING id
             """)
         )

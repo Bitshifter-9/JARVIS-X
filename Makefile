@@ -2,7 +2,8 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml
 
-.PHONY: help bootstrap up down db-shell migrate revision api test test-live lint fmt clean
+.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed mobile \
+        mobile-test openapi lint fmt clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -42,6 +43,19 @@ test: ## Run the test suite
 
 test-live: ## Run accuracy evals against real providers (needs API keys)
 	uv run pytest tests/evals -q --live-eval
+
+seed: ## Seed a demo tenant (demo@jarvis-x.dev / demo-password-12345)
+	uv run python scripts/seed_demo.py
+
+mobile: ## Run the Flutter app in Chrome against a local API
+	cd apps/mobile && flutter run -d chrome --web-port 8081
+
+mobile-test: ## Analyze and test the Flutter app
+	cd apps/mobile && flutter analyze lib test && flutter test
+
+openapi: ## Regenerate the OpenAPI document clients are built from
+	JARVIS_BUILD_SHA=dev uv run python -c "import json; from jarvis.main import app; \
+	  print(json.dumps(app.openapi(), indent=2))" > packages/contracts/openapi/jarvis.json
 
 lint: ## Lint
 	uv run ruff check apps/api tests

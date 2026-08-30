@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from jarvis.api.routes import approvals, auth, devices, goals, health, oauth, webhooks
 from jarvis.core.config import get_settings
@@ -63,6 +64,19 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.env in ("local", "test") else None,
         redoc_url=None,
     )
+
+    # The Flutter web build is a development surface and runs on a different origin.
+    # Never enabled outside local/test: a wildcard origin in production would let any
+    # page a user visits drive their agent.
+    if settings.env in ("local", "test"):
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=False,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-Correlation-ID"],
+        )
 
     app.add_middleware(CorrelationMiddleware)
     register_exception_handlers(app)
