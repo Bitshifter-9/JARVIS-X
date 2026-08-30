@@ -31,7 +31,7 @@ def fail(message: str, fix: str | None = None) -> None:
     sys.exit(1)
 
 
-def request(url: str, *, data: dict | None = None, token: str | None = None) -> dict:
+def request(url: str, *, data: dict | None = None, token: str | None = None):
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(  # noqa: S310 — _checked rejects non-http schemes
         _checked(url), data=body, method="POST" if body else "GET"
@@ -65,6 +65,7 @@ def main() -> int:
     parser.add_argument("--password", default=DEMO_PASSWORD)
     parser.add_argument("--write", action="store_true", help="also request send scopes")
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--timeout", type=int, default=300, help="seconds to await the callback")
     args = parser.parse_args()
 
     api = args.api.rstrip("/")
