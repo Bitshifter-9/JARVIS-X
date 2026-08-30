@@ -182,6 +182,10 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 
 ## Getting started
 
+**What only you can do — see [docs/SETUP.md](docs/SETUP.md)** for the ordered walkthrough.
+The short version: two free LLM keys unblock the agent and the graded accuracy metric;
+everything else can wait.
+
 **Free accounts to create first (~20 minutes):** [Groq](https://console.groq.com) ·
 [Google AI Studio](https://aistudio.google.com) · [OpenRouter](https://openrouter.ai) ·
 [Oracle Cloud](https://cloud.oracle.com) · [Cloudflare R2](https://dash.cloudflare.com) ·
