@@ -26,7 +26,7 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       JARVIS_ENV: test
-      JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@localhost:5433/jarvis_test
+      JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@127.0.0.1:5433/jarvis_test
       JARVIS_JWT_SECRET: ci-only-secret-not-used-anywhere-else
     steps:
       - uses: actions/checkout@v4
@@ -40,13 +40,31 @@ jobs:
 
       - name: Create the test database
         run: |
-          PGPASSWORD=jarvis psql -h localhost -p 5433 -U jarvis -d jarvis \
+          PGPASSWORD=jarvis psql -h 127.0.0.1 -p 5433 -U jarvis -d jarvis \
             -c "CREATE DATABASE jarvis_test OWNER jarvis"
+
+      - name: Database is reachable
+        run: |
+          uv run python - <<'PY'
+          import asyncio, os
+          import asyncpg
+
+          async def main():
+              conn = await asyncpg.connect(
+                  "postgresql://jarvis:jarvis@127.0.0.1:5433/jarvis"
+              )
+              print("server:", await conn.fetchval("SELECT version()"))
+              print("vector available:", await conn.fetchval(
+                  "SELECT count(*) FROM pg_available_extensions WHERE name = 'vector'"))
+              await conn.close()
+
+          asyncio.run(main())
+          PY
 
       - name: Migrate
         run: uv run alembic upgrade head
         env:
-          JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@localhost:5433/jarvis
+          JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@127.0.0.1:5433/jarvis
 
       - name: Lint
         run: uv run ruff check apps/api apps/mac-node tests scripts
