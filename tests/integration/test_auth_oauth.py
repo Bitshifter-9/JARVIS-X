@@ -445,3 +445,24 @@ async def test_unsupported_grant_type_is_reported_as_such(client):
     response = await client.post("/oauth/token", data={"grant_type": "password"})
     assert response.status_code == 400
     assert response.json()["error"] == "unsupported_grant_type"
+
+
+async def test_an_empty_signing_key_stops_startup_not_the_first_login():
+    """An empty JARVIS_JWT_SECRET used to surface as a 500 on login.
+
+    .env.example ships the key blank, and a blank value in .env overrides the code
+    default — so the failure appeared at request time, far from its cause.
+    """
+    import pytest
+    from jarvis.core.config import get_settings
+    from jarvis.main import create_app, lifespan
+
+    settings = get_settings()
+    original = settings.jwt_secret
+    settings.jwt_secret = "   "
+    try:
+        with pytest.raises(RuntimeError, match="JARVIS_JWT_SECRET is empty"):
+            async with lifespan(create_app()):
+                pass
+    finally:
+        settings.jwt_secret = original

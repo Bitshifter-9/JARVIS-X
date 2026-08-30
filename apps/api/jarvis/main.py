@@ -39,8 +39,17 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     configure_logging(level=settings.log_level, json_output=settings.env != "local")
 
-    # A placeholder signing key outside local development would let anyone mint a token
-    # for any account. Refuse to start rather than serve traffic that looks authenticated.
+    # An empty signing key is fatal everywhere. .env.example ships JARVIS_JWT_SECRET
+    # blank, and a blank value in .env overrides the code default — which used to surface
+    # as a 500 on the first login rather than as a startup failure.
+    if not settings.jwt_secret.strip():
+        raise RuntimeError(
+            "JARVIS_JWT_SECRET is empty. Generate one and put it in .env:\n"
+            "    echo \"JARVIS_JWT_SECRET=$(openssl rand -hex 32)\" >> .env"
+        )
+
+    # A placeholder key outside local development would let anyone mint a token for any
+    # account. Refuse to start rather than serve traffic that looks authenticated.
     if settings.env not in ("local", "test") and settings.jwt_secret == INSECURE_JWT_DEFAULT:
         raise RuntimeError(
             "JARVIS_JWT_SECRET is still the development placeholder. "

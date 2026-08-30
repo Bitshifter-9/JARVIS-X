@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml
 
-.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed demo-reset mobile \
+.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed demo-reset connect-google connectors mobile \
         mobile-test openapi lint fmt clean
 
 help: ## Show this help
@@ -49,6 +49,12 @@ seed: ## Seed a demo tenant (demo@jarvis-x.dev / demo-password-12345)
 
 demo-reset: ## Clear and re-seed the demo tenant only
 	uv run python -m scripts.demo_reset
+
+connect-google: ## Connect Gmail + Calendar (needs 'make api' running)
+	uv run python -m scripts.connect_google
+
+connectors: ## Show what is connected and how much it stores
+	uv run python -m scripts.list_connectors
 
 mobile: ## Run the Flutter app in Chrome against a local API
 	cd apps/mobile && flutter run -d chrome --web-port 8081
