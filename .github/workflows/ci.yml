@@ -62,7 +62,18 @@ jobs:
           PY
 
       - name: Migrate
-        run: uv run alembic upgrade head
+        run: |
+          set +e
+          out=$(uv run alembic upgrade head 2>&1)
+          code=$?
+          echo "$out"
+          if [ $code -ne 0 ]; then
+            # Surface the failure as annotations, which are readable without a token.
+            echo "$out" | tail -25 | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
+          fi
+          exit $code
         env:
           JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@127.0.0.1:5433/jarvis
 
