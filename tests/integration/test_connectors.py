@@ -10,19 +10,22 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy import func, select
-
 from jarvis.db.models.source import SourceAccount, SourceObject
 from jarvis.services.identity import IdentityService
+from sqlalchemy import func, select
 
 PASSWORD = "correct-horse-battery-staple"  # noqa: S105
 
 
 @pytest.fixture
 async def auth(client):
-    await client.post("/v1/auth/register", json={"email": "conn@example.com", "password": PASSWORD})
+    await client.post(
+        "/v1/auth/register", json={"email": "conn@example.com", "password": PASSWORD}
+    )
     tokens = (
-        await client.post("/v1/auth/login", json={"email": "conn@example.com", "password": PASSWORD})
+        await client.post(
+            "/v1/auth/login", json={"email": "conn@example.com", "password": PASSWORD}
+        )
     ).json()
     return {"Authorization": f"Bearer {tokens['access_token']}"}
 
@@ -57,7 +60,6 @@ async def test_the_callback_refuses_an_unsigned_state(client):
 
 async def test_the_callback_refuses_a_state_signed_for_something_else(client):
     import jwt as pyjwt
-
     from jarvis.core.config import get_settings
 
     s = get_settings()
