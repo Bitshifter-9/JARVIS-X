@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     # ── queue ──────────────────────────────────────────────────────────
     job_visibility_timeout_seconds: int = 300
     job_max_attempts: int = 5
+    scheduler_tick_seconds: float = 30.0
     job_backoff_base_seconds: float = 2.0
     job_backoff_cap_seconds: float = 600.0
 

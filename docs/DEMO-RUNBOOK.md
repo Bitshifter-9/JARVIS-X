@@ -27,9 +27,38 @@ The demo is a *closed loop*, shown once, end to end. Resist the urge to tour fea
 **2:40 → 3:20 — simulate, then execute the *same hashed plan*.** Show the hash before and after. Nothing about
 the plan changed between preview and execution, and that is checkable.
 
+## Rehearsed
+
+The script above is not aspirational. `tests/e2e/test_demo_rehearsal.py` walks all
+thirteen beats in order against the real services — real PostgreSQL, the real scheduler
+with its version guard, the real policy engine, the real verifier — and it runs twice,
+because succeeding once is luck.
+
+```
+  0.12s  0:30 deadline ingested: correlation cor_01M18G7G…
+  0.13s  1:10 sourced task: cites "due on 5 September 2026 at 11:59 PM"
+  0.14s  1:10 knowledge graph: Confirmed: Hackathon submission —BLOCKED_BY→ Demo video (90%…
+  0.16s  1:50 prediction: 3% → 22% if scope is cut
+  0.16s  2:40 simulation: message.send → ['@team', 'telegram']
+  0.20s  3:20 approved on phone: dispatch authorized
+  0.20s  4:10 verified: provider id tg_msg_88213, verdict verified
+  0.20s  4:45 injection blocked: Effectful actions cannot originate in retrieved content
+  0.22s  5:20 escalation: 2 rungs fired, 1 alert sent
+  0.23s  5:20 acknowledged: 1 later alert cancelled
+  0.23s  6:00 brief: first hour → Finish submission write-up
+  0.24s  6:35 metrics: 4/4 targets met (3 not yet measured)
+  0.24s  6:35 kill switch: 3 jobs cancelled, evidence intact
+```
+
+Run it with `pytest tests/e2e/test_demo_rehearsal.py -s`. What it proves is *coverage of
+the path*, not stage presence — the seven minutes on the day are still yours to practise.
+
 ## Resilience
 
-- **DEMO CLOCK** maps one hour to one minute but runs the **real scheduler path** — not a mocked timer. Say so.
+- **DEMO CLOCK** maps one hour to one minute and runs the **real scheduler path** — the
+  same `schedules` rows, the same tick worker, the same version guard. Only the clock
+  moves. It refuses to enable outside a local or demo environment, because a system whose
+  sense of time can be changed by a request has no deadlines. Say all of this out loud.
 - Keep signed fixtures for provider delays; state clearly when a fixture is being replayed.
 - Record a 90-second backup video showing the real phone, Mac and (if built) Alexa device.
 - One-click reset clears **only** demo-tenant rows. Never production data, never evidence from another tenant.
@@ -44,7 +73,8 @@ the plan changed between preview and execution, and that is checkable.
 - [ ] Demo tenant seeded; one-click reset verified
 - [ ] Adversarial fixture loaded and confirmed to produce zero effectful actions
 - [ ] Backup video on the desktop, not in the cloud
-- [ ] Rehearsed twice, end to end, without notes
+- [ ] `pytest tests/e2e/test_demo_rehearsal.py` green (the path)
+- [ ] Rehearsed twice, end to end, without notes (the delivery)
 
 ## If something breaks on stage
 
