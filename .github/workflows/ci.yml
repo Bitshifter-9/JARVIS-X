@@ -93,7 +93,9 @@ jobs:
           JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@127.0.0.1:5433/jarvis
 
       - name: Lint
-        run: uv run ruff check apps/api apps/mac-node tests scripts
+        # github format emits ::error:: annotations, so a failure is readable without
+        # opening the log.
+        run: uv run ruff check --output-format=github apps/api apps/mac-node tests scripts
 
       # Real Chromium: the Mac-offline gate is meaningless against a mocked browser.
       - name: Install Chromium
