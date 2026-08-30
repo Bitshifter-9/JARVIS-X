@@ -26,6 +26,24 @@ from jarvis.db.session import dispose_engine, get_engine, get_sessionmaker  # no
 
 configure_logging(level="WARNING", json_output=False)
 
+# Everything user-scoped cascades from here.
+ROOT_TABLE = "users"
+
+# Tables that survive a user deletion because they are global or independently keyed.
+INDEPENDENT_TABLES = [
+    "jobs",
+    "provider_health",
+    "extraction_cache",
+    "oauth_clients",
+    "llm_calls",
+    "audit_log",
+]
+
+# Built once from the two constants above; no value here ever comes from input.
+_CLEANUP_STATEMENTS = [text(f'DELETE FROM "{ROOT_TABLE}"')] + [  # noqa: S608
+    text(f'DELETE FROM "{name}"') for name in INDEPENDENT_TABLES  # noqa: S608
+]
+
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
@@ -61,9 +79,13 @@ async def _clean_tables(_schema, request):
     # TRUNCATE needs ACCESS EXCLUSIVE, and the session-scoped saver holds its own psycopg
     # pool over them, so truncating them here contends with it. Checkpoints are keyed by
     # a fresh run id per test, so stale rows are inert rather than leaked state.
-    table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    # DELETE, not TRUNCATE. TRUNCATE rewrites a file per table — right for large tables,
+    # but doing it across ~40 tables before each of ~480 tests took the suite from 40s to
+    # 190s. Deleting users cascades to almost everything else.
     async with get_sessionmaker()() as session:
-        await session.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
+        # Statements are built once, from the constants above — never from input.
+        for statement in _CLEANUP_STATEMENTS:
+            await session.execute(statement)
         await session.commit()
     yield
 

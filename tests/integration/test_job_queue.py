@@ -242,3 +242,30 @@ async def test_visible_at_is_assigned_by_the_database():
             )
         ).mappings().one()
         assert row["due"] is True
+
+
+async def test_a_claimed_batch_is_returned_in_priority_order():
+    """``UPDATE ... RETURNING`` does not preserve the ordering of the CTE that chose the
+    rows, so a worker draining a batch could otherwise handle a low-priority job before
+    a deadline escalation claimed alongside it."""
+    async with get_sessionmaker()() as s:
+        q = JobQueue(s)
+        now = datetime.now(UTC)
+        # Enqueued in deliberately the wrong order, several times over, so a run that
+        # merely happened to match insertion order cannot pass.
+        for i in range(6):
+            await q.enqueue("t.order", {"p": 0, "i": i}, priority=0)
+            await q.enqueue("t.order", {"p": 5, "i": i}, priority=5)
+            await q.enqueue(
+                "t.order", {"p": 9, "i": i}, priority=9, run_at=now - timedelta(minutes=i)
+            )
+        await s.commit()
+
+        batch = await q.claim("w", limit=18)
+        await s.commit()
+
+        priorities = [j.priority for j in batch]
+        assert priorities == sorted(priorities, reverse=True), priorities
+
+        top = [j for j in batch if j.priority == 9]
+        assert [j.visible_at for j in top] == sorted(j.visible_at for j in top)

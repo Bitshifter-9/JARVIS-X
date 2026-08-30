@@ -140,8 +140,11 @@ class JobQueue:
     ) -> list[Job]:
         """Atomically claim up to ``limit`` due jobs.
 
-        Higher ``priority`` first, then oldest ``visible_at`` — so a backlog drains in
-        arrival order within each priority band rather than starving old work.
+        Returned highest ``priority`` first, then oldest ``visible_at``, so a backlog
+        drains in arrival order within each band rather than starving old work. That
+        ordering is applied again after the statement returns, because
+        ``UPDATE ... RETURNING`` does not preserve the ordering of the CTE that selected
+        the rows.
         """
         s = get_settings()
 
@@ -150,7 +153,8 @@ class JobQueue:
         # surface even if a caller passes attacker-influenced kinds.
         stmt = text("""
             WITH claimed AS (
-                SELECT id FROM jobs
+                SELECT id, priority, visible_at
+                FROM jobs
                 WHERE status = 'pending'
                   AND visible_at <= clock_timestamp()
                   AND (CAST(:kinds AS text[]) IS NULL OR kind = ANY(CAST(:kinds AS text[])))
@@ -167,7 +171,8 @@ class JobQueue:
                 updated_at = now()
             FROM claimed
             WHERE jobs.id = claimed.id
-            RETURNING jobs.*
+            RETURNING jobs.id, claimed.priority AS claim_priority,
+                      claimed.visible_at AS claim_due_at
         """)
 
         params: dict[str, Any] = {
@@ -177,11 +182,23 @@ class JobQueue:
             "kinds": kinds,
         }
 
-        rows = (await self.session.execute(stmt, params)).mappings().all()
-        jobs = [await self.session.get(Job, row["id"]) for row in rows]
-        claimed = [j for j in jobs if j is not None]
-        for job in claimed:
-            await self.session.refresh(job)
+        # The CTE's pre-update priority and due time are carried out through RETURNING and
+        # re-sorted here. RETURNING makes no promise about row order, and the ordering
+        # cannot be recomputed afterwards because the UPDATE has already replaced
+        # ``visible_at`` with the lease expiry. (A window function would express this
+        # directly, but PostgreSQL forbids one alongside FOR UPDATE.)
+        rows = sorted(
+            (await self.session.execute(stmt, params)).mappings().all(),
+            key=lambda r: (-r["claim_priority"], r["claim_due_at"]),
+        )
+        claimed = []
+        for row in rows:
+            job = await self.session.get(Job, row["id"])
+            if job is not None:
+                await self.session.refresh(job)
+                claimed.append(job)
+
+
         if claimed:
             log.info("jobs_claimed", worker_id=worker_id, count=len(claimed))
         return claimed

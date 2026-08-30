@@ -164,7 +164,7 @@ JARVIS-X/
 
 ## Status
 
-🚧 **Phase 3 — 3 of 6.** 409 Python + 11 Dart tests green. Remaining work is blocked on toolchains: full Xcode for macOS, Android SDK + a Firebase project for push.
+🚧 **Phase 6 — 3 of 5.** 482 Python + 11 Dart tests green, including 46 adversarial and 15 chaos tests. Remaining UI work is blocked on toolchains: full Xcode for macOS, Android SDK + a Firebase project for push.
 
 | Phase | Scope | State |
 |---|---|---|
@@ -174,7 +174,7 @@ JARVIS-X/
 | 3 | Mac tool set ✅ · knowledge graph ✅ · product modules ✅ · macOS UI · voice | 🚧 3/6 |
 | 4 | Alexa skill · account linking · reminders · certification | ⬜ |
 | 5 | Slack · Classroom · Canvas · WhatsApp · calls · OpenClaw | ⬜ |
-| 6 | Adversarial · chaos · metrics · CI/CD · demo | ⬜ |
+| 6 | Adversarial ✅ · chaos ✅ · metrics ✅ · CI 🚧 · demo 🚧 | 🚧 3/5 |
 
 Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 
@@ -191,7 +191,7 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 make bootstrap    # pins Python 3.12, installs deps, starts Postgres+pgvector, migrates
 make api          # http://localhost:8000/docs
 make seed         # demo@jarvis-x.dev / demo-password-12345
-make test         # 409 Python tests
+make test         # 482 Python tests
 make mobile       # the Flutter app in Chrome
 make mobile-test  # analyze + 11 Dart tests
 make test-live    # + accuracy evals against real providers (needs keys)

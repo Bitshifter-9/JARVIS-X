@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml
 
-.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed mobile \
+.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed demo-reset mobile \
         mobile-test openapi lint fmt clean
 
 help: ## Show this help
@@ -46,6 +46,9 @@ test-live: ## Run accuracy evals against real providers (needs API keys)
 
 seed: ## Seed a demo tenant (demo@jarvis-x.dev / demo-password-12345)
 	uv run python scripts/seed_demo.py
+
+demo-reset: ## Clear and re-seed the demo tenant only
+	uv run python -m scripts.demo_reset
 
 mobile: ## Run the Flutter app in Chrome against a local API
 	cd apps/mobile && flutter run -d chrome --web-port 8081

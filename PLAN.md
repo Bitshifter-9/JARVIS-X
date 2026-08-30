@@ -510,15 +510,15 @@ Phases end on **exit tests**, not calendar dates.
 | 5.5 | Twilio outbound call as final escalation | Call placed once, capped, opt-in, logged |
 | 5.6 | OpenClaw adapter, isolated, narrow service identity | OpenClaw event → action card; **no DB credentials in that container** |
 
-### Phase 6 — Credibility
+### Phase 6 — Credibility — 🚧 3 of 5 complete, 482 tests green
 
 | # | Task | Exit test |
 |---|---|---|
-| 6.1 | Adversarial: injection, replay, expired job, scope violation, storm | Malicious email causes **zero** effectful actions |
-| 6.2 | Chaos: 429/500, Mac disconnect, duplicate webhook, stale schedule, provider outage | Known failures repair once or stop clearly |
-| 6.3 | Metrics dashboard vs. §15 targets | All seven measured, not asserted |
-| 6.4 | CI/CD: GitHub Actions, Developer-ID sign + notarize macOS, signed AAB | Clean deployment from scratch |
-| 6.5 | Demo runbook, DEMO CLOCK (real scheduler path), one-click tenant reset | Seven-minute rehearsal succeeds twice |
+| 6.1 | ✅ Adversarial: injection, replay, expired job, scope violation, storm | **12 attack shapes × a fully compromised planner → zero effectful actions**; 46 tests |
+| 6.2 | ✅ Chaos: outage, worker death, thundering herd, redelivery, stale schedule, disconnect | **Known failures repair once or stop clearly**; 15 tests |
+| 6.3 | ✅ Metrics scorecard vs. §15 targets | **All seven measured from what happened**; an unmeasured metric says so rather than reporting 100% |
+| 6.4 | 🚧 GitHub Actions (backend · Flutter · contracts) | Runs lint, migrations, full suite on real Postgres + Chromium, and fails on a stale OpenAPI. macOS signing needs a Developer ID |
+| 6.5 | 🚧 DEMO CLOCK + one-click tenant reset | Reset clears 24 tables for the demo tenant only and leaves other accounts intact; rehearsal still to run |
 
 **If time slips, cut in this order:** OpenClaw → Canvas/Moodle → WhatsApp → phone call → knowledge-graph
 *visualization* → Alexa reminders.

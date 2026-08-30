@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: jarvis
+          POSTGRES_PASSWORD: jarvis
+          POSTGRES_DB: jarvis
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U jarvis"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      JARVIS_ENV: test
+      JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@localhost:5433/jarvis_test
+      JARVIS_JWT_SECRET: ci-only-secret-not-used-anywhere-else
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --extra dev
+
+      - name: Create the test database
+        run: |
+          PGPASSWORD=jarvis psql -h localhost -p 5433 -U jarvis -d jarvis \
+            -c "CREATE DATABASE jarvis_test OWNER jarvis"
+
+      - name: Migrate
+        run: uv run alembic upgrade head
+        env:
+          JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:jarvis@localhost:5433/jarvis
+
+      - name: Lint
+        run: uv run ruff check apps/api apps/mac-node tests scripts
+
+      # Real Chromium: the Mac-offline gate is meaningless against a mocked browser.
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+
+      - name: Test
+        run: uv run pytest -q
+
+      # A drifted spec silently produces an untyped client for Dart and TypeScript.
+      - name: OpenAPI is in sync
+        run: |
+          uv run python -c "import json; from jarvis.main import app; \
+            print(json.dumps(app.openapi(), indent=2))" > /tmp/openapi.json
+          diff -u packages/contracts/openapi/jarvis.json /tmp/openapi.json \
+            || (echo "::error::OpenAPI is stale — run 'make openapi'" && exit 1)
+
+  mobile:
+    name: Flutter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: apps/mobile
+      - run: flutter analyze lib test
+        working-directory: apps/mobile
+      - run: flutter test
+        working-directory: apps/mobile
+      - run: flutter build web --release
+        working-directory: apps/mobile
+
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Schemas are valid JSON Schema
+        run: |
+          pip install --quiet jsonschema
+          python - <<'PY'
+          import json, pathlib, sys
+          from jsonschema import Draft202012Validator
+
+          failed = False
+          for path in sorted(pathlib.Path("packages/contracts/schemas").glob("*.json")):
+              schema = json.loads(path.read_text())
+              try:
+                  Draft202012Validator.check_schema(schema)
+                  print(f"ok   {path.name}")
+              except Exception as exc:
+                  print(f"FAIL {path.name}: {exc}")
+                  failed = True
+          sys.exit(1 if failed else 0)
+          PY
