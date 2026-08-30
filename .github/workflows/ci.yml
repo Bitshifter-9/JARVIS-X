@@ -68,10 +68,10 @@ jobs:
           code=$?
           echo "$out"
           if [ $code -ne 0 ]; then
-            # Surface the failure as annotations, which are readable without a token.
-            echo "$out" | tail -25 | while IFS= read -r line; do
-              echo "::error::${line}"
-            done
+            # One annotation carrying the tail: GitHub caps annotations at ten, and the
+            # exception is at the end of a traceback, not the start. %0A is its newline.
+            detail=$(echo "$out" | tail -20 | sed 's/%/%25/g; s/\r/%0D/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error::${detail}"
           fi
           exit $code
         env:
