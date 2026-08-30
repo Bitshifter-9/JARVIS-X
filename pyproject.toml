@@ -19,9 +19,15 @@ dependencies = [
     "pgvector>=0.3.6",
     # security
     "argon2-cffi>=23.1",
+    "cryptography>=44.0",
     "pyjwt>=2.10",
     # observability
     "structlog>=24.4",
+    # Cloud-side browser automation. This is what keeps verified execution alive when
+    # the Mac is offline (PLAN.md §3).
+    "playwright>=1.48",
+    # The Mac helper dials out over WebSocket; no inbound port is ever opened.
+    "websockets>=13.0",
 ]
 
 [project.optional-dependencies]
@@ -36,7 +42,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["apps/api/jarvis"]
+packages = ["apps/api/jarvis", "apps/mac-node/macnode"]
 
 [tool.uv]
 package = true
@@ -50,6 +56,7 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["e2e: end-to-end, needs a real browser binary"]
 
 [tool.ruff]
 line-length = 100
@@ -60,4 +67,4 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
 ignore = ["S101"]           # assert is fine in tests
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106"]
+"tests/*" = ["S105", "S106", "S108"]  # literal paths in fixtures are test data, not file use

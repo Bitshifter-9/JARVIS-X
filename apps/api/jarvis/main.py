@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from jarvis.api.routes import auth, health, oauth
+from jarvis.api.routes import approvals, auth, devices, goals, health, oauth, webhooks
 from jarvis.core.config import get_settings
 from jarvis.core.correlation import CorrelationMiddleware
 from jarvis.core.errors import register_exception_handlers
@@ -70,6 +70,10 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(oauth.router)
+    app.include_router(goals.router)
+    app.include_router(approvals.router)
+    app.include_router(devices.router)
+    app.include_router(webhooks.router)
 
     return app
 

@@ -148,7 +148,7 @@ JARVIS-X/
 │   └── policy/              risk rules as data + test vectors
 ├── apps/
 │   ├── api/jarvis/          FastAPI · agent core · services · connectors · llm · workers
-│   ├── mac-node/            PyObjC automation helper
+│   ├── mac-node/            PyObjC automation helper — `python -m macnode pair|run`
 │   ├── control_center/      Flutter macOS
 │   ├── mobile/              Flutter Android
 │   └── alexa-skill/         TypeScript ASK SDK Lambda
@@ -162,13 +162,13 @@ JARVIS-X/
 
 ## Status
 
-✅ **Phase 0 — Foundation complete.** 47 tests green against a real PostgreSQL.
+✅ **Phase 1 — Vertical slice complete.** 218 tests green against a real PostgreSQL, a real browser and real ECDSA signatures.
 
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | ✅ |
-| 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | 🚧 next |
-| 2 | Gmail · Calendar · extraction · Android · push · escalation · memory | ⬜ |
+| 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | ✅ |
+| 2 | Gmail · Calendar · extraction · Android · push · escalation · memory | 🚧 next |
 | 3 | Flutter macOS · Mac tool set · live deadline card · knowledge graph · voice | ⬜ |
 | 4 | Alexa skill · account linking · reminders · certification | ⬜ |
 | 5 | Slack · Classroom · Canvas · WhatsApp · calls · OpenClaw | ⬜ |
@@ -188,7 +188,7 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 ```bash
 make bootstrap    # pins Python 3.12, installs deps, starts Postgres+pgvector, migrates
 make api          # http://localhost:8000/docs
-make test         # 47 tests against a real PostgreSQL
+make test         # 218 tests against a real PostgreSQL and a real browser
 ```
 
 `make help` lists everything. Postgres binds host port **5433**, because a Homebrew

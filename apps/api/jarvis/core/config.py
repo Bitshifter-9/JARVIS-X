@@ -75,6 +75,23 @@ class Settings(BaseSettings):
     provider_cooldown_seconds: int = 60
     provider_failure_threshold: int = 3
 
+    # ── Telegram ───────────────────────────────────────────────────────
+    telegram_bot_token: str = ""
+    telegram_owner_chat_id: str = ""
+    # Echoed by Telegram on every webhook call; this is what distinguishes a real
+    # update from anyone who discovered the URL.
+    telegram_webhook_secret: str = ""
+
+    # ── device signing (blueprint §12) ─────────────────────────────────
+    # PEM of the server's ECDSA private key. Generated per-process in local/test only;
+    # a rotating key would silently invalidate every paired helper.
+    device_signing_key_pem: str = ""
+    device_job_ttl_seconds: int = 300
+
+    # ── browser worker (cloud-side, so it works with the Mac offline) ──
+    browser_headless: bool = True
+    browser_timeout_seconds: int = 30
+
     # ── kill switch ────────────────────────────────────────────────────
     global_pause: bool = Field(
         default=False,

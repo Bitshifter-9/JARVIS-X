@@ -405,21 +405,22 @@ Phases end on **exit tests**, not calendar dates.
 
 > **Gate:** 0.5 and 0.6 must pass before Phase 1. Everything rides on the queue and the router.
 
-### Phase 1 — Vertical slice ⭐ *the submission lives or dies here*
+### Phase 1 — Vertical slice ⭐ *the submission lives or dies here* — ✅ complete, 218 tests green
 
 | # | Task | Exit test |
 |---|---|---|
-| 1.1 | Canonical envelope + idempotent ingest | Same provider event twice → one task |
-| 1.2 | Goal/task DAG + critical path + work sessions | Goal decomposed; dependencies enforced |
-| 1.3 | **Failure prediction + recovery options** | Severity *changes* when an estimate or progress changes |
-| 1.4 | Scheduler T-24h/2h/1h/15m, version-guarded | Acknowledging cancels every later alert |
-| 1.5 | Approvals with payload hash + **simulation mode** | An R2 send cannot run without a valid unexpired matching approval |
-| 1.6 | Telegram: alerts + inline approve/reject | Approve from Telegram; run resumes; evidence returns |
-| 1.7 | **Cloud browser worker** (Playwright) + DOM evidence | Navigate, act, verify URL/title/DOM — **Mac powered off** |
-| 1.8 | Mac pairing + `mac.open_app` + window verifier | Chrome opens; evidence shows pid + frontmost bundle; non-allowlisted bundle refused *at the helper* |
-| 1.9 | Signed job protocol + offline queue/expiry/review | Replayed and expired jobs rejected and audited; offline job offered for review on reconnect |
+| 1.1 | ✅ Canonical envelope + idempotent ingest | Same provider event twice → one event, one job |
+| 1.2 | ✅ Goal/task DAG + critical path + work sessions | Goal decomposed; cycles refused at the API |
+| 1.3 | ✅ **Failure prediction + recovery options** | **Severity changes with estimate and with progress**; lognormal fitted to (p50, p80) |
+| 1.4 | ✅ Schedule ladder T-24h/2h/1h/15m, version-guarded | **Acknowledging cancels every later alert** |
+| 1.5 | ✅ Approvals with payload hash + **simulation mode** | **An R2 send cannot run without a valid, unexpired, matching approval** |
+| 1.6 | ✅ Telegram: alerts + inline approve/reject | **Approve from Telegram → the action dispatches**; another account cannot decide your approval |
+| 1.7 | ✅ **Cloud browser worker** (Playwright) + DOM evidence | **Navigate, act, verify URL/title/DOM with zero devices paired** |
+| 1.8 | ✅ Mac pairing + `mac.open_app` + window verifier | **Evidence shows pid + frontmost bundle; a non-allowlisted bundle is refused at the helper** |
+| 1.9 | ✅ Signed job protocol + offline queue/expiry/review | **Replay, expiry and tampering all rejected and audited; stale jobs offered for review on reconnect** |
 
-> **Gate:** deadline event → task → prediction → approval → **verified action**, one correlation id, **Mac off**.
+> **Gate: passed.** deadline event → task → prediction → approval → **verified action**, one correlation
+> id — and the browser path runs with **zero devices paired**.
 
 ### Phase 2 — Ingestion and the phone
 

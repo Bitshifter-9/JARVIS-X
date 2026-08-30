@@ -74,3 +74,69 @@ async def client():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture(scope="session")
+def fixture_site():
+    """A tiny local site for the browser worker to act on.
+
+    Real HTTP and a real browser: the point of the 1.7 gate is that DOM evidence is
+    genuinely observed, and a mocked page would prove nothing.
+    """
+    import http.server
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):  # keep the test output readable
+            pass
+
+        def _send(self, body: str, status: int = 200, headers: dict | None = None):
+            encoded = body.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(encoded)))
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(encoded)
+
+        def do_GET(self):  # noqa: N802
+            if self.path.startswith("/deadline"):
+                self._send(
+                    "<html><head><title>CS401 Assignment 3</title></head><body>"
+                    "<h1 id='title'>Assignment 3</h1>"
+                    "<p class='due'>Due 5 September 2026, 23:59 IST</p>"
+                    "</body></html>"
+                )
+            elif self.path.startswith("/redirect"):
+                self._send("", status=302, headers={"Location": "/login"})
+            elif self.path.startswith("/login"):
+                self._send("<html><head><title>Sign in</title></head><body>Sign in</body></html>")
+            elif self.path.startswith("/form"):
+                self._send(
+                    "<html><head><title>Submit</title></head><body>"
+                    "<form method='post' action='/submitted'>"
+                    "<input name='comment' id='comment'>"
+                    "<button id='go' type='submit'>Send</button></form></body></html>"
+                )
+            elif self.path.startswith("/submitted"):
+                self._send(
+                    "<html><head><title>Received</title></head><body>"
+                    "<div id='receipt'>Received</div></body></html>"
+                )
+            elif self.path.startswith("/missing"):
+                self._send("<html><body>gone</body></html>", status=404)
+            else:
+                self._send("<html><head><title>Home</title></head><body>Home</body></html>")
+
+        def do_POST(self):  # noqa: N802
+            self._send(
+                "<html><head><title>Received</title></head><body>"
+                "<div id='receipt'>Received</div></body></html>"
+            )
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
