@@ -26,6 +26,10 @@ dependencies = [
     # Cloud-side browser automation. This is what keeps verified execution alive when
     # the Mac is offline (PLAN.md §3).
     "playwright>=1.48",
+    "litellm>=1.98",
+    "langgraph>=1.2",
+    "langgraph-checkpoint-postgres>=3.1",
+    "psycopg[binary,pool]>=3.2",
     # The Mac helper dials out over WebSocket; no inbound port is ever opened.
     "websockets>=13.0",
 ]
@@ -35,6 +39,8 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
+    "hypothesis>=6.166",
+    "schemathesis>=4.25",
 ]
 
 [build-system]
@@ -56,7 +62,11 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
-markers = ["e2e: end-to-end, needs a real browser binary"]
+markers = [
+    "e2e: end-to-end, needs a real browser binary",
+    "eval: accuracy evaluation against fixtures",
+    "live: needs real provider API keys and spends quota",
+]
 
 [tool.ruff]
 line-length = 100

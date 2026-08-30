@@ -50,9 +50,19 @@ async def _clean_tables(_schema):
     Not a per-test transaction: the concurrency tests need genuinely separate sessions
     committing against each other, which a shared outer transaction would serialize away.
     """
-    table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     async with get_sessionmaker()() as session:
-        await session.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
+        # LangGraph's checkpoint tables are created by its own migrations and are not in
+        # Base.metadata, so they are discovered rather than listed. Leaving them behind
+        # leaks run state between tests.
+        rows = await session.execute(
+            text("""
+                SELECT tablename FROM pg_tables
+                WHERE schemaname = 'public' AND tablename <> 'alembic_version'
+            """)
+        )
+        names = ", ".join(f'"{r[0]}"' for r in rows)
+        if names:
+            await session.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
         await session.commit()
     yield
 
@@ -140,3 +150,19 @@ def fixture_site():
     thread.start()
     yield f"http://127.0.0.1:{server.server_address[1]}"
     server.shutdown()
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--live-eval",
+        action="store_true",
+        default=False,
+        help="run evals against real LLM providers (needs API keys, spends quota)",
+    )
+
+
+@pytest.fixture
+def live_eval(request):
+    if not request.config.getoption("--live-eval"):
+        pytest.skip("live eval: pass --live-eval to run against real providers")
+    return True

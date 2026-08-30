@@ -26,12 +26,12 @@ from jarvis.core.config import get_settings
 from jarvis.core.correlation import get_correlation_id
 from jarvis.core.ids import uuid7
 from jarvis.core.logging import get_logger
-from jarvis.llm.base import LLMProvider
 from jarvis.llm.budget import BudgetGuard
 from jarvis.llm.health import ProviderHealthStore
 from jarvis.llm.providers import (
     GeminiProvider,
     GroqProvider,
+    LiteLLMProvider,
     OllamaProvider,
     OpenRouterFreeProvider,
     OpenRouterPaidProvider,
@@ -57,7 +57,7 @@ DEFAULT_CASCADE: dict[CallClass, tuple[str, ...]] = {
 }
 
 
-def default_providers() -> dict[str, LLMProvider]:
+def default_providers() -> dict[str, LiteLLMProvider]:
     return {
         p.name: p
         for p in (
@@ -75,7 +75,7 @@ class LLMRouter:
         self,
         session: AsyncSession,
         *,
-        providers: dict[str, LLMProvider] | None = None,
+        providers: dict[str, LiteLLMProvider] | None = None,
         cascade: dict[CallClass, tuple[str, ...]] | None = None,
     ) -> None:
         self.session = session
@@ -150,7 +150,7 @@ class LLMRouter:
 
     # ── the pre-flight filter ──────────────────────────────────────────
     def _skip_reason(  # noqa: ANN001
-        self, provider: LLMProvider, request: LLMRequest, budget, cooling
+        self, provider: LiteLLMProvider, request: LLMRequest, budget, cooling
     ) -> str | None:
         if not provider.is_configured():
             return "not configured"
@@ -169,7 +169,7 @@ class LLMRouter:
     async def _record_call(
         self,
         request: LLMRequest,
-        provider: LLMProvider,
+        provider: LiteLLMProvider,
         *,
         status: str,
         response: LLMResponse | None = None,

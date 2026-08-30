@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml
 
-.PHONY: help bootstrap up down db-shell migrate revision api test lint fmt clean
+.PHONY: help bootstrap up down db-shell migrate revision api test test-live lint fmt clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -39,6 +39,9 @@ api: ## Run the API with reload
 
 test: ## Run the test suite
 	uv run pytest -q
+
+test-live: ## Run accuracy evals against real providers (needs API keys)
+	uv run pytest tests/evals -q --live-eval
 
 lint: ## Lint
 	uv run ruff check apps/api tests

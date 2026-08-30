@@ -41,6 +41,9 @@ class LLMRequest:
     prompt_version: str | None = None
     user_id: uuid.UUID | None = None
     stop: list[str] = field(default_factory=list)
+    # >1 asks the provider for several completions so the caller can vote. Costs n×
+    # output tokens, so it is gated on low confidence rather than used by default.
+    samples: int = 1
 
 
 @dataclass
@@ -54,6 +57,7 @@ class LLMResponse:
     cost_inr: float = 0.0
     parsed: dict[str, Any] | None = None
     attempts: int = 1
+    samples: list[str] = field(default_factory=list)
 
 
 # ── failure taxonomy ───────────────────────────────────────────────────

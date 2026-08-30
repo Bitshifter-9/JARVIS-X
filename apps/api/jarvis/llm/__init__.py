@@ -2,6 +2,7 @@
 
 from jarvis.llm.budget import BudgetGuard, BudgetStatus
 from jarvis.llm.health import ProviderHealthStore
+from jarvis.llm.providers import LiteLLMProvider
 from jarvis.llm.router import DEFAULT_CASCADE, LLMRouter, default_providers
 from jarvis.llm.types import (
     AllProvidersFailed,
@@ -24,6 +25,7 @@ __all__ = [
     "LLMRequest",
     "LLMResponse",
     "LLMRouter",
+    "LiteLLMProvider",
     "Message",
     "ProviderHealthStore",
     "ProviderNotConfigured",

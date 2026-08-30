@@ -139,21 +139,38 @@ Exactly the blueprint §12 behaviour, and it is a *feature*, not a degradation:
 
 ---
 
-## 4. LLM routing — three free tiers, cascading
+## 4. Agent runtime and LLM routing
 
-Inference is cloud-side and multi-provider. No single provider's rate limit can stop the system.
+### What a framework may and may not own
+
+Blueprint §1 chooses a hand-written orchestrator because **"no framework controls
+authorization."** That constraint is kept exactly. What changed is that sequencing,
+durability and provider transport are no longer worth hand-writing.
+
+| Concern | Owner | Why |
+|---|---|---|
+| Loop sequencing, retries, checkpointing, resume | **LangGraph** | Durable graph execution and `interrupt()` for human-in-the-loop are solved problems; our version was ~200 lines of the same. |
+| Risk classification, ALLOW/REQUIRE_APPROVAL/DENY | **Ours** (`services/policy`) | A framework must never decide what is permitted. |
+| Approval records and payload binding | **Ours** (`approvals` table) | The SHA-256 binding is the security property; it does not live in a graph node. |
+| Step, token, wall-clock and money budgets | **Ours** (`core/config`, `llm/budget`) | A runaway loop is the failure mode that bites agent projects; the ceiling stays in our harness. |
+| Executor revalidation before dispatch | **Ours** (`tool_gateway`) | Second, independent check — unchanged. |
+| Provider transport, retries, structured output | **LiteLLM** | One interface to 100+ providers; deletes our hand-rolled HTTP clients. |
+| Cascade order, circuit breaking, INR accounting | **Ours** (`llm/router`) | Per-call-class routing and DB-shared breaker state that LiteLLM's in-process router cannot give us across API + workers. |
+
+The graph is a **state machine we defined**, executed by LangGraph. Policy is a node every
+effectful path must traverse, and the executor revalidates after it regardless. If
+LangGraph vanished tomorrow the security properties would be unchanged.
 
 ### Providers
 
 | Provider | Role | Why it earns its slot |
 |---|---|---|
-| **Groq** | Primary: classify · plan · reflect · chat | Fastest free inference available (hundreds of tok/s on Llama 3.3 70B). Latency is what makes the demo feel alive. |
-| **Google Gemini** | Primary: **deadline extraction** | Native structured-output/JSON-schema mode. Extraction accuracy is the graded 90% metric — this is where correctness beats speed. |
-| **OpenRouter** | Overflow + paid fallback | One key, many models. `:free` variants first; paid credit only when free tiers are exhausted **and** budget remains. |
-| **Ollama on Mac** | Optional local | Zero-cost dev, and a genuine offline story — but **never required**. |
+| **Groq** | classify · plan · reflect · chat | Fastest free inference available. Latency is what makes the demo feel alive. |
+| **Google Gemini** | **deadline extraction** | Native JSON-schema-constrained decoding. Extraction accuracy is the graded 90% metric. |
+| **OpenRouter** | overflow, then paid fallback | One key, many models. `:free` variants first; paid only when free tiers are exhausted **and** budget remains. |
+| **Ollama on Mac** | optional local | Zero-cost dev and a genuine offline story — never required. |
 
-> ⚠️ Free-tier request limits move constantly. Verify current quotas in your own accounts before demo week —
-> the blueprint's own reference note says the same. The router is written so a changed limit is a config edit.
+> ⚠️ Free-tier quotas move constantly. Verify them in your own accounts before demo week.
 
 ### Router design
 
@@ -161,24 +178,46 @@ Inference is cloud-side and multi-provider. No single provider's rate limit can 
 CASCADE = {
   "classify": ["groq", "gemini", "openrouter_free", "openrouter_paid"],
   "plan":     ["groq", "gemini", "openrouter_free", "openrouter_paid"],
-  "extract":  ["gemini", "groq_json", "openrouter_paid"],   # accuracy first
+  "extract":  ["gemini", "groq", "openrouter_paid"],   # accuracy first
   "chat":     ["groq", "gemini", "openrouter_free"],
-  "embed":    ["local_minilm"],                              # on the VPS, CPU
+  "embed":    ["local_minilm"],                         # on the VPS, CPU
 }
 ```
 
-- **429 / quota exhausted → advance the cascade.** Per-provider token bucket, circuit breaker, and a
-  `provider_health` table so the router stops trying a dead provider for a cooldown window.
-- **Every call is budget-checked first.** Past `MONTHLY_BUDGET_INR`, paid tiers are refused and the cascade
-  ends at free providers.
-- **Every call is logged** with provider, model, prompt version, token counts and cost estimate. The
-  dashboard shows spend-to-date. No surprises.
-- `ENABLE_PAID_LLM=false` **must** yield a fully working system on free tiers alone. That is a test, not a hope.
+- 429 or quota exhaustion advances the cascade; a per-provider breaker with a cooldown
+  lives in `provider_health`, shared by the API and every worker.
+- Every call is budget-checked *before* dispatch and recorded in `llm_calls` with provider,
+  model, prompt version, tokens and an INR cost estimate.
+- `ENABLE_PAID_LLM=false` must yield a fully working system on free tiers alone. Tested.
 
-**Embeddings run on the VPS**, not through an API: `all-MiniLM-L6-v2` is 22M parameters and comfortable on
-CPU. 384-d vectors, no rate limit, no cost, no dependency. Schema uses `vector(384)`.
+**Embeddings never leave the VPS.** `all-MiniLM-L6-v2` is 22M parameters, comfortable on
+CPU, 384-d — no rate limit, no cost, and the memory corpus stays on our machine.
 
----
+### Loop engineering
+
+Techniques applied where they change a measured number, not for their own sake:
+
+| Technique | Where | What it buys |
+|---|---|---|
+| Schema-constrained decoding | extraction | The model cannot emit a shape the parser rejects. |
+| Self-consistency (n-sample vote) | ambiguous deadlines only | Lifts extraction accuracy where a single sample is unstable; costs n× so it is gated on low confidence. |
+| Exact-payload caching | extraction, classification | A redelivered provider event re-extracts for free. |
+| Bounded reflection | `MAX_REPLANS=2` | Repair once on new evidence, then ask. Never "keep trying". |
+| Prompt versioning + golden fixtures | `packages/prompts` | A prompt edit that regresses the 90% target fails CI instead of the demo. |
+| LLM-as-judge, only for near-misses | eval harness | Exact match is the primary metric; a judge adjudicates "5 Sept 23:59" vs "2026-09-05T23:59". |
+
+### Testing
+
+| Layer | Tool |
+|---|---|
+| Deterministic unit/integration/e2e | pytest — the suite that actually protects the code |
+| Invariants over generated inputs | **Hypothesis** — e.g. R4 is denied for *every* possible args dict |
+| API contract fuzzing | **Schemathesis** against our own OpenAPI |
+| Recorded provider interactions | **pytest-recording** — real Gmail/Gemini responses, replayed offline |
+
+AI test generators (TestSprite and similar) are listed as an optional authoring aid in
+`docs/DEMO-RUNBOOK.md`. They are a way to *draft* cases; a generated test that nobody read
+is not evidence, so the gates in §12 stay hand-written.
 
 ## 5. Stack — blueprint vs. what we build
 
@@ -195,7 +234,9 @@ CPU. 384-d vectors, no rate limit, no cost, no dependency. Schema uses `vector(3
 | Edge | CloudFront + WAF | **Caddy** (auto Let's Encrypt) + Cloudflare proxy | Free TLS, free DDoS shield, free rate limiting. |
 | Push | FCM + APNs | **FCM** | Android only. |
 | Calling | Amazon Connect | **Twilio** | Connect outbound to India is restricted; Twilio is straightforward. See §13. |
-| LLM | Bedrock | **Groq + Gemini + OpenRouter** | §4. |
+| Agent loop | hand-written | **LangGraph** + Postgres checkpointer, policy still ours | §4. |
+| LLM transport | Bedrock SDK | **LiteLLM** behind our cascade | One interface, 100+ providers, native structured output. |
+| LLM providers | Bedrock | **Groq + Gemini + OpenRouter** | §4. |
 | Mac automation | Swift + Pigeon | **Python + PyObjC** | Identical Apple APIs (`NSWorkspace`, `AXUIElement`, `CGWindowList`), no Xcode required. Swift is a *packaging* concern for a signed `.app`, not a capability one. |
 | IaC | AWS CDK | **Docker Compose + Caddyfile** | One VM. CDK would be ceremony. |
 
@@ -422,17 +463,20 @@ Phases end on **exit tests**, not calendar dates.
 > **Gate: passed.** deadline event → task → prediction → approval → **verified action**, one correlation
 > id — and the browser path runs with **zero devices paired**.
 
-### Phase 2 — Ingestion and the phone
+### Phase 2 — Ingestion, the brain, and the phone — 🚧 3 of 10, 283 tests green
 
 | # | Task | Exit test |
 |---|---|---|
-| 2.1 | Gmail connector (OAuth + `history.list` polling; Pub/Sub push upgrade optional) | A real email deadline creates exactly one sourced task |
-| 2.2 | Deadline extraction on Gemini, strict JSON schema, low temperature | ≥90% on a curated 50-item fixture set |
-| 2.3 | Google Calendar read → `fixed_calendar_blocks` | Prediction changes when a meeting is added |
-| 2.4 | Flutter Android: Today · Goals · Chat · Approvals · Timeline · Devices · Connectors | Phone approves; phone shows the evidence |
-| 2.5 | FCM push + WorkManager + AlarmManager exact alarm (opt-in) | Alarm-clock wake works with the screen locked |
-| 2.6 | Escalation chain + quiet hours + per-day cap | An ignored alert escalates exactly **once** |
-| 2.7 | Memory tiers + hybrid retrieval | Retrieval returns citations, never credentials |
+| 2.0 | ✅ LiteLLM transport behind the existing cascade | **Swapped with zero test changes**; cascade, breaker and budget untouched |
+| 2.1 | ✅ **LangGraph agent loop** with Postgres checkpointer + `interrupt()` | **Suspends on approval, resumes in a fresh runtime, completes**; policy still denies before execution |
+| 2.2 | Gmail connector (OAuth + `history.list` polling) | A real email deadline creates exactly one sourced task |
+| 2.3 | 🚧 **Deadline extraction**: schema-constrained, prompt-versioned, cached, self-consistent | Harness + 30 fixtures committed and self-verifying; **live number needs a provider key** |
+| 2.4 | Google Calendar read → `fixed_calendar_blocks` | Prediction changes when a meeting is added |
+| 2.5 | Escalation chain + quiet hours + per-day cap | An ignored alert escalates exactly **once** |
+| 2.6 | Memory tiers + hybrid SQL→vector retrieval | Retrieval returns citations, never credentials |
+| 2.7 | Flutter Android: Today · Goals · Chat · Approvals · Timeline · Devices · Connectors | Phone approves; phone shows the evidence |
+| 2.8 | FCM push + WorkManager + AlarmManager exact alarm (opt-in) | Alarm-clock wake works with the screen locked |
+| 2.9 | 🚧 Hypothesis invariants ✅ + Schemathesis contract fuzzing | Generated inputs find no policy bypass; API fuzzing still to wire |
 
 ### Phase 3 — Desktop, graph, modules
 

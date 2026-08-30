@@ -102,8 +102,10 @@ for explicit review.
 | Scheduler | `schedules` table + 30 s tick — replaces EventBridge Scheduler |
 | Approvals | Payload-hashed DB rows — replaces Step Functions callback tokens |
 | Auth | Authlib OAuth2 server + JWT + Argon2id (Alexa account linking needs a real OAuth2 grant) |
+| Agent loop | **LangGraph** + Postgres checkpointer — sequencing only; policy stays ours |
 | Realtime | FastAPI native WebSocket |
-| **LLM** | **Groq** (chat/plan/classify) → **Gemini** (extraction, JSON-schema mode) → **OpenRouter** (overflow + paid fallback), cascading on rate limits, hard budget cap |
+| **LLM** | **LiteLLM** transport → **Groq** (chat/plan) → **Gemini** (extraction) → **OpenRouter** (overflow + paid), cascading on rate limits, hard budget cap |
+| Testing | pytest · **Hypothesis** invariants · **Schemathesis** contract fuzzing · committed accuracy evals |
 | Embeddings | `all-MiniLM-L6-v2` on the VPS, CPU, 384-d |
 | Browser | Headless Playwright, cloud-side |
 | Mac automation | Python + PyObjC — `NSWorkspace`, `AXUIElement`, `CGWindowList` |
@@ -162,13 +164,13 @@ JARVIS-X/
 
 ## Status
 
-✅ **Phase 1 — Vertical slice complete.** 218 tests green against a real PostgreSQL, a real browser and real ECDSA signatures.
+🚧 **Phase 2 — in progress.** 283 tests green against a real PostgreSQL, a real browser, real ECDSA signatures and a real LangGraph checkpointer.
 
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Contracts · DB · OAuth2 · job queue · **LLM router** | ✅ |
 | 1 | **Vertical slice** — deadline → prediction → approval → verified action, *Mac off* | ✅ |
-| 2 | Gmail · Calendar · extraction · Android · push · escalation · memory | 🚧 next |
+| 2 | LangGraph loop · LiteLLM · extraction · Gmail · Android · escalation · memory | 🚧 3/10 |
 | 3 | Flutter macOS · Mac tool set · live deadline card · knowledge graph · voice | ⬜ |
 | 4 | Alexa skill · account linking · reminders · certification | ⬜ |
 | 5 | Slack · Classroom · Canvas · WhatsApp · calls · OpenClaw | ⬜ |
@@ -188,7 +190,8 @@ Phases end on **exit tests**, not calendar dates. See [PLAN.md §12](PLAN.md).
 ```bash
 make bootstrap    # pins Python 3.12, installs deps, starts Postgres+pgvector, migrates
 make api          # http://localhost:8000/docs
-make test         # 218 tests against a real PostgreSQL and a real browser
+make test         # 283 tests
+make test-live    # + accuracy evals against real providers (needs keys)
 ```
 
 `make help` lists everything. Postgres binds host port **5433**, because a Homebrew
