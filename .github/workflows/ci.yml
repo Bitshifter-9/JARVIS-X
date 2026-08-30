@@ -35,6 +35,21 @@ jobs:
         with:
           enable-cache: true
 
+      # A .gitignore rule meant for runtime artifacts once matched a source directory
+      # ("models/" caught jarvis/db/models/), and the package was silently absent from
+      # every clone. Local tests could not see it; only a fresh checkout could.
+      - name: Every Python package is committed
+        run: |
+          missing=0
+          while IFS= read -r pkg; do
+            if [ -z "$(git ls-files "$pkg")" ]; then
+              echo "::error::$pkg contains no tracked files — check .gitignore"
+              missing=1
+            fi
+          done < <(find apps -name '__init__.py' -not -path '*/__pycache__/*' \
+                     -exec dirname {} \; | sort -u)
+          exit $missing
+
       - name: Install
         run: uv sync --extra dev
 

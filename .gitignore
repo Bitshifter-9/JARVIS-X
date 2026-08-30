@@ -25,22 +25,26 @@ token.json
 *.tfvars
 
 # ── Models & large binaries (re-download, don't commit) ─
-voices/
+# Anchored to the repo root. An unanchored "models/" also matched
+# apps/api/jarvis/db/models/ and silently kept a whole package out of the repo.
+/models/
+/voices/
 *.onnx
 *.onnx.json
 *.gguf
 *.bin
 *.wav
 *.mp3
-models/
 
 # ── Evidence & runtime artifacts ───────────────────────
-evidence/
-screenshots/
+# Anchored for the same reason: "evidence/" also matched
+# apps/api/jarvis/services/evidence/.
+/evidence/
+/screenshots/
+/logs/
+/chroma/
 *.sqlite
 *.db
-chroma/
-logs/
 *.log
 
 # ── Flutter / Dart ─────────────────────────────────────
