@@ -267,5 +267,10 @@ async def test_a_claimed_batch_is_returned_in_priority_order():
         priorities = [j.priority for j in batch]
         assert priorities == sorted(priorities, reverse=True), priorities
 
-        top = [j for j in batch if j.priority == 9]
-        assert [j.visible_at for j in top] == sorted(j.visible_at for j in top)
+        # Within the top band, oldest first. Asserted on the payload, because after a
+        # claim ``visible_at`` holds the lease expiry rather than the original due time —
+        # which is precisely why the ordering has to be carried out of the CTE.
+        top = [j.payload["i"] for j in batch if j.priority == 9]
+        assert top == sorted(top, reverse=True), (
+            "run_at was now-i minutes, so the largest i is the oldest and must come first"
+        )

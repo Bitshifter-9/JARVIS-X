@@ -153,7 +153,9 @@ class Approval(UUIDPrimaryKey, Timestamps, Base):
     decided_by: Mapped[str | None] = mapped_column(String(64))  # channel that decided
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # R3 additionally requires a local confirmation on the Mac itself.
-    requires_local_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requires_local_confirmation: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     local_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 

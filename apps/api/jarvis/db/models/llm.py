@@ -26,7 +26,8 @@ class LLMCall(UUIDPrimaryKey, Timestamps, Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
-    call_class: Mapped[str] = mapped_column(String(16), nullable=False)  # classify|plan|extract|chat
+    # classify | plan | extract | chat
+    call_class: Mapped[str] = mapped_column(String(16), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     prompt_version: Mapped[str | None] = mapped_column(String(32))

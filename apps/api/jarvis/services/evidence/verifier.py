@@ -133,7 +133,9 @@ def check_requirement(
             exists = observed.get("exists")
             if exists is None:
                 return CheckResult(kind, Verdict.INCONCLUSIVE, expected, None, "not checked")
-            return CheckResult(kind, Verdict.VERIFIED if exists else Verdict.FAILED, expected, exists)
+            return CheckResult(
+                kind, Verdict.VERIFIED if exists else Verdict.FAILED, expected, exists
+            )
 
         case "screenshot":
             digest = observed.get("digest")

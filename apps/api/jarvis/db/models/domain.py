@@ -49,7 +49,9 @@ class Task(UUIDPrimaryKey, Timestamps, Base):
     __tablename__ = "tasks"
     __table_args__ = (
         Index("ix_tasks_user_status_due", "user_id", "status", "due_at"),
-        CheckConstraint("estimate_minutes IS NULL OR estimate_minutes >= 0", name="estimate_nonneg"),
+        CheckConstraint(
+            "estimate_minutes IS NULL OR estimate_minutes >= 0", name="estimate_nonneg"
+        ),
         CheckConstraint(
             "remaining_minutes IS NULL OR remaining_minutes >= 0", name="remaining_nonneg"
         ),

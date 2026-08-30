@@ -8,12 +8,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from jarvis.core.ids import uuid7
 from jarvis.core.logging import get_logger
 from jarvis.db.models.agent import Action, ActionStatus, Evidence, Verdict
 from jarvis.services.evidence.verifier import CheckResult, EvidenceRequirement, Verifier
+from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
 

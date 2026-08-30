@@ -51,7 +51,9 @@ class ConnectorCursor(UUIDPrimaryKey, Timestamps, Base):
     """
 
     __tablename__ = "connector_cursors"
-    __table_args__ = (Index("uq_connector_cursors_account_kind", "account_id", "kind", unique=True),)
+    __table_args__ = (
+        Index("uq_connector_cursors_account_kind", "account_id", "kind", unique=True),
+    )
 
     account_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("source_accounts.id", ondelete="CASCADE"), nullable=False
