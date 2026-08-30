@@ -38,6 +38,19 @@ jobs:
       # A .gitignore rule meant for runtime artifacts once matched a source directory
       # ("models/" caught jarvis/db/models/), and the package was silently absent from
       # every clone. Local tests could not see it; only a fresh checkout could.
+      # .env.example is committed, so a real value pasted into it by mistake would be
+      # published. Easy mistake: it is the file the guide tells you to open.
+      - name: .env.example holds no real values
+        run: |
+          leaked=$(grep -E '^JARVIS_[A-Z_]*(KEY|SECRET|TOKEN|CLIENT_ID|PASSWORD)=.+$' \
+                     .env.example | grep -v '=$' || true)
+          if [ -n "$leaked" ]; then
+            echo "$leaked" | cut -d= -f1 | while read -r k; do
+              echo "::error::$k has a value in .env.example — it belongs in .env"
+            done
+            exit 1
+          fi
+
       - name: Every Python package is committed
         run: |
           missing=0
