@@ -525,3 +525,167 @@ async def test_connection_state_is_tracked(session, user, paired):
     await devices.disconnect(paired.id, "conn-1")
     await session.commit()
     assert await devices.is_online(paired.id) is False
+
+
+# ── 3.2 the full Mac tool set ──────────────────────────────────────────
+def _ui_executor(server_public, device_private, adapter, **policy):
+    return _executor(
+        server_public, device_private, adapter,
+        allowed_templates={"git.status"}, **policy,
+    )
+
+
+def test_reading_the_ui_reports_the_accessibility_tree(server_keys, device_keys):
+    from macnode.adapters import UIElement
+
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(
+        installed={CHROME},
+        elements={CHROME: [
+            UIElement(role="AXButton", title="Submit", enabled=True),
+            UIElement(role="AXTextField", title="Comment", value="", enabled=True),
+        ]},
+    )
+    adapter.launch(CHROME)
+
+    result = _ui_executor(server_public, device_private, adapter).handle(
+        _envelope(server_private, action="mac.read_ui", args={"bundle_id": CHROME})
+    )
+    assert result.status == "completed"
+    assert result.observed["element_count"] == 2
+    assert {e["title"] for e in result.observed["elements"]} == {"Submit", "Comment"}
+
+
+def test_a_revoked_accessibility_permission_is_reported_not_guessed(server_keys, device_keys):
+    """Without this the calls simply return nothing, which reads as "the button wasn't there"."""
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(installed={CHROME}, accessibility=False)
+
+    result = _ui_executor(server_public, device_private, adapter).handle(
+        _envelope(server_private, action="mac.read_ui", args={"bundle_id": CHROME})
+    )
+    assert result.observed["permission"] == "accessibility_denied"
+    assert result.observed["elements"] == []
+
+
+def test_pressing_a_button_that_does_not_exist_reports_failure(server_keys, device_keys):
+    from macnode.adapters import UIElement
+
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(
+        installed={CHROME},
+        elements={CHROME: [UIElement(role="AXButton", title="Submit")]},
+    )
+    adapter.launch(CHROME)
+    executor = _ui_executor(server_public, device_private, adapter)
+
+    missing = executor.handle(
+        _envelope(server_private, action="mac.press_button",
+                  args={"bundle_id": CHROME, "title": "Nonexistent"})
+    )
+    assert missing.observed["pressed"] is False
+    assert adapter.pressed == []
+
+    found = executor.handle(
+        _envelope(server_private, nonce="n2", action="mac.press_button",
+                  args={"bundle_id": CHROME, "title": "Submit"})
+    )
+    assert found.observed["pressed"] is True
+    assert adapter.pressed == [(CHROME, "Submit")]
+
+
+def test_a_disabled_control_is_not_pressed(server_keys, device_keys):
+    from macnode.adapters import UIElement
+
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(
+        installed={CHROME},
+        elements={CHROME: [UIElement(role="AXButton", title="Submit", enabled=False)]},
+    )
+    adapter.launch(CHROME)
+
+    result = _ui_executor(server_public, device_private, adapter).handle(
+        _envelope(server_private, action="mac.press_button",
+                  args={"bundle_id": CHROME, "title": "Submit"})
+    )
+    assert result.observed["pressed"] is False
+
+
+def test_a_capture_returns_a_digest_not_the_pixels(server_keys, device_keys):
+    """The bytes stay on the Mac; a digest proves the state without shipping a desktop."""
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(installed={CHROME})
+    adapter.launch(CHROME)
+
+    result = _ui_executor(server_public, device_private, adapter).handle(
+        _envelope(server_private, action="mac.capture_window", args={"bundle_id": CHROME})
+    )
+    assert result.observed["digest"].startswith("sha256:")
+    assert "image" not in result.observed
+    assert "path" not in result.observed
+
+
+def test_a_denied_screen_recording_permission_is_reported(server_keys, device_keys):
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(installed={CHROME}, screen_recording=False)
+    adapter.launch(CHROME)
+
+    result = _ui_executor(server_public, device_private, adapter).handle(
+        _envelope(server_private, action="mac.capture_window", args={"bundle_id": CHROME})
+    )
+    assert result.observed["permission"] == "screen_recording_denied"
+    assert result.observed["digest"] is None
+
+
+def test_file_access_cannot_escape_its_granted_directory(server_keys, device_keys):
+    """No full-disk access: a path outside the chosen directory is refused, not resolved."""
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    adapter = FakeMacAdapter(scoped_files={"/Users/p/project/report.pdf"})
+    executor = _ui_executor(server_public, device_private, adapter)
+
+    inside = executor.handle(
+        _envelope(server_private, action="mac.file_exists",
+                  args={"path": "/Users/p/project/report.pdf",
+                        "scope_bookmark": "/Users/p/project"})
+    )
+    assert inside.observed["exists"] is True
+
+    outside = executor.handle(
+        _envelope(server_private, nonce="n2", action="mac.file_exists",
+                  args={"path": "/Users/p/.ssh/id_rsa", "scope_bookmark": "/Users/p/project"})
+    )
+    assert outside.observed["exists"] is False
+
+
+def test_the_helper_refuses_new_tools_it_has_not_enabled(server_keys, device_keys):
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    guard = JobGuard(
+        server_public_pem=server_public,
+        policy=LocalPolicy(allowed_bundle_ids={CHROME}, allowed_actions={"mac.open_app"}),
+    )
+    verdict = guard.admit(
+        _envelope(server_private, action="mac.capture_window", args={"bundle_id": CHROME})
+    )
+    assert verdict.reason is RejectReason.UNKNOWN_ACTION
+
+
+def test_new_mac_tools_still_honour_the_bundle_allowlist(server_keys, device_keys):
+    server_private, server_public = server_keys
+    device_private, _ = device_keys
+    guard = JobGuard(
+        server_public_pem=server_public, policy=LocalPolicy(allowed_bundle_ids={CHROME})
+    )
+    for action in ("mac.read_ui", "mac.press_button", "mac.capture_window"):
+        verdict = guard.admit(
+            _envelope(server_private, nonce=f"n-{action}", action=action,
+                      args={"bundle_id": TERMINAL, "title": "x"})
+        )
+        assert verdict.reason is RejectReason.NOT_ALLOWLISTED, action

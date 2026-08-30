@@ -417,3 +417,66 @@ async def test_an_unregistered_template_is_refused_by_policy(session, user):
     )
     assert result.decision is Decision.DENY
     assert "template_is_registered" in result.failed_conditions
+
+
+# ── 3.2 risk classification for the new Mac tools ──────────────────────
+async def test_reading_the_ui_is_reversible_but_capturing_the_screen_is_not(session, user, device):
+    """Capture is R2 because whatever was on screen leaves the machine as evidence."""
+    policy = PolicyService(session)
+
+    read = await policy.evaluate(
+        await policy.load_context(
+            user.id, "mac.read_ui", {"bundle_id": "com.google.Chrome"}, device_id=device.id
+        )
+    )
+    assert read.decision is Decision.ALLOW
+    assert read.risk is Risk.R1
+
+    capture = await policy.evaluate(
+        await policy.load_context(
+            user.id, "mac.capture_window", {"bundle_id": "com.google.Chrome"},
+            device_id=device.id,
+        )
+    )
+    assert capture.decision is Decision.REQUIRE_APPROVAL
+    assert capture.risk is Risk.R2
+
+
+async def test_pressing_a_button_in_another_app_always_asks(session, user, device):
+    """What the button does is not knowable from here, so it is never automatic."""
+    policy = PolicyService(session)
+    result = await policy.evaluate(
+        await policy.load_context(
+            user.id, "mac.press_button",
+            {"bundle_id": "com.google.Chrome", "title": "Send"}, device_id=device.id,
+        )
+    )
+    assert result.decision is Decision.REQUIRE_APPROVAL
+    assert result.risk is Risk.R2
+
+
+async def test_file_checks_require_a_granted_directory(session, user, device):
+    """Two layers, deliberately.
+
+    Policy refuses a request that names no granted directory at all. Whether a path stays
+    *inside* that directory is enforced at the helper, which is the only place that can
+    resolve symlinks against the real filesystem.
+    """
+    policy = PolicyService(session)
+
+    unscoped = await policy.evaluate(
+        await policy.load_context(
+            user.id, "mac.file_exists", {"path": "/Users/p/.ssh/id_rsa"}, device_id=device.id
+        )
+    )
+    assert unscoped.decision is Decision.DENY
+    assert "scope_bookmark" in unscoped.reason
+
+    scoped = await policy.evaluate(
+        await policy.load_context(
+            user.id, "mac.file_exists",
+            {"path": "/Users/p/project/report.pdf", "scope_bookmark": "/Users/p/project"},
+            device_id=device.id,
+        )
+    )
+    assert scoped.decision is Decision.ALLOW

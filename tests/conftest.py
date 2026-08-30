@@ -44,12 +44,19 @@ async def _schema():
 
 
 @pytest.fixture(autouse=True)
-async def _clean_tables(_schema):
-    """Truncate between tests.
+async def _clean_tables(_schema, request):
+    """Truncate between tests that touch the database.
 
     Not a per-test transaction: the concurrency tests need genuinely separate sessions
     committing against each other, which a shared outer transaction would serialize away.
+
+    Skipped for ``tests/unit`` — those are pure by convention, and truncating 37 tables
+    before each of a hundred of them was most of the suite's runtime.
     """
+    if "/tests/unit/" in str(request.node.fspath).replace("\\", "/"):
+        yield
+        return
+
     # Only our own tables. LangGraph's checkpoint tables are deliberately excluded:
     # TRUNCATE needs ACCESS EXCLUSIVE, and the session-scoped saver holds its own psycopg
     # pool over them, so truncating them here contends with it. Checkpoints are keyed by

@@ -478,15 +478,15 @@ Phases end on **exit tests**, not calendar dates.
 | 2.8 | ⬜ FCM push + WorkManager + AlarmManager exact alarm | Needs an Android build first |
 | 2.9 | ✅ Hypothesis invariants + Schemathesis spec validation | **Found a real bug**: the Telegram webhook returned 500 unconfigured, which would have caused a retry storm |
 
-### Phase 3 — Desktop, graph, modules
+### Phase 3 — Desktop, graph, modules — 🚧 3 of 6 (3.1/3.3 need Xcode and the Android SDK)
 
 | # | Task | Exit test |
 |---|---|---|
 | 3.1 | Flutter macOS Control Center + menu bar + kill switch | Chat, deadline board, timeline, approval cards, STOP |
-| 3.2 | Mac node full tool set: AX automation, window/screen evidence, scoped files, command templates | Each tool produces structured evidence; templates show the exact command |
+| 3.2 | ✅ Mac node full tool set: AX automation, window/screen evidence, scoped files, templates | Capture returns a **digest, not pixels**; a revoked permission is reported rather than read as "not there"; file access cannot escape its granted directory |
 | 3.3 | Android live deadline card: ongoing notification + Glance widget | Remaining time + completion probability + Acknowledge / Snooze / Start Focus |
-| 3.4 | Knowledge graph + **visualization** | "Why do you believe this?" resolves to a source |
-| 3.5 | Morning / evening / focus / learning modules | Each is a view over the shared goal engine, not a new engine |
+| 3.4 | ✅ Knowledge graph (visualization deferred to the Flutter surface) | **"Why do you believe this?" resolves to a source**; corroboration raises confidence but never reaches certainty; retraction leaves a trace |
+| 3.5 | ✅ Morning / evening / focus modules | Views over the shared goal engine; the first hour goes to the **critical path**, not the nearest deadline |
 | 3.6 | Voice on the Mac: Whisper + Piper, push-to-talk, visible indicator | Ported from v1, with an indicator |
 
 ### Phase 4 — Alexa

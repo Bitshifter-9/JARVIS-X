@@ -57,7 +57,15 @@ class LocalPolicy:
 
     allowed_bundle_ids: set[str] = field(default_factory=set)
     allowed_actions: set[str] = field(
-        default_factory=lambda: {"mac.open_app", "mac.focus_app", "mac.run_template"}
+        default_factory=lambda: {
+            "mac.open_app",
+            "mac.focus_app",
+            "mac.run_template",
+            "mac.read_ui",
+            "mac.press_button",
+            "mac.capture_window",
+            "mac.file_exists",
+        }
     )
     allowed_templates: set[str] = field(default_factory=set)
     stopped: bool = False
@@ -97,7 +105,10 @@ class JobGuard:
                 False, RejectReason.UNKNOWN_ACTION, f"{envelope.action} is not enabled here"
             )
 
-        if envelope.action in ("mac.open_app", "mac.focus_app"):
+        if envelope.action in (
+            "mac.open_app", "mac.focus_app", "mac.read_ui", "mac.press_button",
+            "mac.capture_window",
+        ):
             bundle_id = envelope.args.get("bundle_id")
             if bundle_id not in self.policy.allowed_bundle_ids:
                 return GuardVerdict(

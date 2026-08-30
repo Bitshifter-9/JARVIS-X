@@ -69,6 +69,26 @@ RULES: dict[str, ToolRule] = {
             "gmail.create_draft", Risk.R1, "Create a draft; nothing is sent",
             standing_permission_allowed=True,
         ),
+        ToolRule(
+            "mac.read_ui", Risk.R1, "Read an allowlisted app's accessibility tree",
+            conditions=("device_is_paired_owner", "bundle_id_in_allowlist"),
+        ),
+        ToolRule(
+            "mac.file_exists", Risk.R1, "Check a file inside a user-selected directory",
+            conditions=("device_is_paired_owner", "path_in_scoped_directory"),
+        ),
+        # Capturing the screen is R2, not R1: the effect leaves the machine as evidence,
+        # and whatever was on screen leaves with it.
+        ToolRule(
+            "mac.capture_window", Risk.R2, "Capture one window of an allowlisted app",
+            conditions=("device_is_paired_owner", "bundle_id_in_allowlist"),
+        ),
+        # Pressing a button drives another application. What that button does is not
+        # knowable from here, so it is never automatic.
+        ToolRule(
+            "mac.press_button", Risk.R2, "Press a named control in an allowlisted app",
+            conditions=("device_is_paired_owner", "bundle_id_in_allowlist"),
+        ),
         # ── R2 ─────────────────────────────────────────────────────────
         ToolRule("message.send", Risk.R2, "Send a message to another person"),
         ToolRule("gmail.send", Risk.R2, "Send an email"),
@@ -170,6 +190,24 @@ MANIFESTS: dict[str, ToolManifest] = {
             "mac.run_template", timeout_seconds=60,
             verify=("http_status",), requires_device=True,
             simulatable=True, args_required=("template",),
+        ),
+        ToolManifest(
+            "mac.read_ui", timeout_seconds=15,
+            verify=("process_running",), requires_device=True, args_required=("bundle_id",),
+        ),
+        ToolManifest(
+            "mac.press_button", timeout_seconds=20,
+            verify=("foreground_window_bundle_id",), requires_device=True,
+            args_required=("bundle_id", "title"),
+        ),
+        ToolManifest(
+            "mac.capture_window", timeout_seconds=20,
+            verify=("screenshot",), requires_device=True, args_required=("bundle_id",),
+        ),
+        ToolManifest(
+            "mac.file_exists", timeout_seconds=10,
+            verify=("file_exists",), requires_device=True,
+            args_required=("path", "scope_bookmark"),
         ),
         ToolManifest("focus.start", timeout_seconds=10, verify=("process_running",)),
         ToolManifest("tasks.list", timeout_seconds=10, verify=("http_status",)),

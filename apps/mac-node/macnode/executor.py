@@ -65,8 +65,57 @@ class Executor:
                 return self._focus_app(envelope.args["bundle_id"])
             case "mac.run_template":
                 return self._run_template(envelope.args)
+            case "mac.read_ui":
+                return self._read_ui(envelope.args["bundle_id"])
+            case "mac.press_button":
+                return self._press_button(envelope.args["bundle_id"], envelope.args["title"])
+            case "mac.capture_window":
+                return self._capture(envelope.args["bundle_id"])
+            case "mac.file_exists":
+                return self._file_exists(envelope.args["path"], envelope.args["scope_bookmark"])
             case _:
                 raise ValueError(f"unhandled action {envelope.action}")
+
+    def _read_ui(self, bundle_id: str) -> dict[str, Any]:
+        if not self.adapter.accessibility_granted():
+            return {"permission": "accessibility_denied", "elements": []}
+        elements = self.adapter.ui_elements(bundle_id)
+        return {
+            "permission": "granted",
+            "element_count": len(elements),
+            "elements": [
+                {"role": e.role, "title": e.title, "enabled": e.enabled} for e in elements
+            ],
+        }
+
+    def _press_button(self, bundle_id: str, title: str) -> dict[str, Any]:
+        if not self.adapter.accessibility_granted():
+            return {"permission": "accessibility_denied", "pressed": False}
+        pressed = self.adapter.press_button(bundle_id, title)
+        window = self.adapter.frontmost_window()
+        return {
+            "permission": "granted",
+            "pressed": pressed,
+            "frontmost_bundle_id": window.frontmost_bundle_id,
+            "window_title": window.window_title,
+        }
+
+    def _capture(self, bundle_id: str) -> dict[str, Any]:
+        if not self.adapter.screen_recording_granted():
+            return {"permission": "screen_recording_denied", "digest": None}
+        capture = self.adapter.capture_window(bundle_id)
+        if capture is None:
+            return {"permission": "granted", "digest": None}
+        # The digest travels; the pixels stay here unless something asks for them.
+        return {
+            "permission": "granted",
+            "digest": capture.digest,
+            "width": capture.width,
+            "height": capture.height,
+        }
+
+    def _file_exists(self, path: str, scope_bookmark: str) -> dict[str, Any]:
+        return {"exists": self.adapter.file_exists(path, scope_bookmark), "path": path}
 
     def _open_app(self, bundle_id: str) -> dict[str, Any]:
         """Launch, then wait for the window server to agree it is in front.
