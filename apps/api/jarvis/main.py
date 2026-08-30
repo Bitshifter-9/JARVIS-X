@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from jarvis.api.routes import (
     approvals,
     auth,
+    connectors,
     devices,
     goals,
     health,
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(devices.router)
     app.include_router(webhooks.router)
     app.include_router(metrics.router)
+    app.include_router(connectors.router)
 
     return app
 
