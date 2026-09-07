@@ -123,7 +123,48 @@ if ! grep -qE '^JARVIS_DEVICE_SIGNING_KEY_PEM=.+' "$TMP_ENV"; then
     echo "  generated the device signing key and saved it to your local .env"
   fi
 fi
-scp -q -i "$KEY" "$TMP_ENV" "$TARGET:JARVIS-X/.env"
+# Secrets you set directly on the server (a Slack bot token, a webhook secret you pasted
+# into the box and never into this laptop's .env) must survive a deploy. Shipping the
+# local .env verbatim would wipe them. So: for any key that is empty or absent locally
+# but present on the server, keep the server's value; local non-empty always wins.
+SRV_ENV="$(mktemp)"
+scp -q -i "$KEY" "$TARGET:JARVIS-X/.env" "$SRV_ENV" 2>/dev/null || : > "$SRV_ENV"
+MERGED_ENV="$(mktemp)"
+trap 'rm -f "$TMP_ENV" "$SRV_ENV" "$MERGED_ENV"' EXIT
+python3 - "$TMP_ENV" "$SRV_ENV" > "$MERGED_ENV" <<'PY'
+import sys
+def load(path):
+    d = {}
+    for line in open(path, encoding="utf-8", errors="replace"):
+        s = line.rstrip("\n")
+        if not s or s.lstrip().startswith("#") or "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        d[k.strip()] = v
+    return d
+local_path, server_path = sys.argv[1], sys.argv[2]
+local, server = load(local_path), load(server_path)
+carried = []
+out = []
+for line in open(local_path, encoding="utf-8", errors="replace"):
+    s = line.rstrip("\n")
+    if "=" in s and not s.lstrip().startswith("#"):
+        k, v = s.split("=", 1)
+        k = k.strip()
+        if v.strip().strip('"') == "" and server.get(k, "").strip().strip('"') != "":
+            out.append(f"{k}={server[k]}")
+            carried.append(k)
+            continue
+    out.append(s)
+for k, v in server.items():
+    if k not in local and v.strip().strip('"') != "":
+        out.append(f"{k}={v}")
+        carried.append(k)
+sys.stdout.write("\n".join(out) + "\n")
+if carried:
+    sys.stderr.write("  kept server-set values: " + ", ".join(sorted(set(carried))) + "\n")
+PY
+scp -q -i "$KEY" "$MERGED_ENV" "$TARGET:JARVIS-X/.env"
 
 echo "▸ building and starting (first run downloads Chromium and the models — minutes)"
 $SSH "bash -c 'cd JARVIS-X && sudo -E make prod-up'"
