@@ -56,6 +56,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   (`learned_style`) that triage and drafting read so replies sound like you.
 - ✅ **#16 Relationship cadence** — a "Reconnect?" card surfaces people you usually keep up with
   but have gone quiet on, from the rhythm of your correspondence (deterministic, no model).
+- ✅ **#17 Interest drift** — a "Where your head is" card shows topics rising and fading in your
+  own words (recent vs baseline), so briefings track the current you (deterministic, no model).
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -111,8 +113,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     your correspondents, reads the gaps between messages as a typical cadence, and flags anyone
     you usually keep up with but have gone quiet on. A "Reconnect?" card on Insights. (Phone/
     WhatsApp, where the person is in the notification title, is the later extension.)
-17. ⬜ **Interest drift model.** What you care about *now* vs. what you're drifting from, so
-    briefings track your actual attention, not a stale profile.
+17. ✅ **Interest drift model.** What you care about *now* vs. what you're drifting from, so
+    briefings track your actual attention, not a stale profile. Deterministic: the topics/names
+    in your own recent messages vs a longer baseline → rising and fading. A "Where your head is"
+    card on Insights. Richer signal arrives once reading/watching capture (#4) lands.
 18. ⬜ **Private mood/sentiment trend.** From journals and your own messages, on-device only —
     a gentle line chart, never shared, feeds the coach.
 19. ⬜ **Digital twin persona.** A persona that answers *as you* (drafting, rehearsing a hard

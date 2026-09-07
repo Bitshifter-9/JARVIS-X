@@ -29,6 +29,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _resurface = const [];
   List<Map<String, dynamic>> _phrasebook = const [];
   List<Map<String, dynamic>> _people = const [];
+  Map<String, dynamic> _interests = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -62,6 +63,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.resurfacedMemories(),
         client.phrasebook(),
         client.relationships(),
+        client.interests(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -79,6 +81,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _resurface = results[11] as List<Map<String, dynamic>>;
         _phrasebook = results[12] as List<Map<String, dynamic>>;
         _people = results[13] as List<Map<String, dynamic>>;
+        _interests = results[14] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -106,6 +109,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       if (mounted) setState(() => _scanning = false);
     }
   }
+
+  bool get _hasDrift =>
+      (_interests['rising'] as List?)?.isNotEmpty == true ||
+      (_interests['fading'] as List?)?.isNotEmpty == true;
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +177,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_travel.isNotEmpty) _TravelCard(trips: _travel),
                       if (_travel.isNotEmpty) const SizedBox(height: 8),
                       _LabelsCard(labels: _labels),
+                      if (_hasDrift) const SizedBox(height: 8),
+                      if (_hasDrift) _InterestsCard(drift: _interests),
                       if (_phrasebook.isNotEmpty) const SizedBox(height: 8),
                       if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
                     ],
@@ -759,6 +768,63 @@ class _PeopleCard extends StatelessWidget {
               trailing: Text('${p['days_since']}d ago',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.error)),
             ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Interest drift: topics rising and fading in your own words (second-brain #17) — so
+/// briefings track the current you, not a stale profile.
+class _InterestsCard extends StatelessWidget {
+  const _InterestsCard({required this.drift});
+  final Map<String, dynamic> drift;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rising = (drift['rising'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final fading = (drift['fading'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.trending_up, size: 20),
+            const SizedBox(width: 8),
+            Text('Where your head is', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text('Topics moving up and down in what you talk about.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 10),
+          if (rising.isNotEmpty) ...[
+            Text('Rising', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final t in rising)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.arrow_upward, size: 14, color: scheme.primary),
+                  label: Text('${t['term']}'),
+                ),
+            ]),
+          ],
+          if (fading.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Fading', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final t in fading)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: Icon(Icons.arrow_downward, size: 14,
+                      color: scheme.onSurface.withValues(alpha: 0.5)),
+                  label: Text('${t['term']}'),
+                ),
+            ]),
+          ],
         ]),
       ),
     );
