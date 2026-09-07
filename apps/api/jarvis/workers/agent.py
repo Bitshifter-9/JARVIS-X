@@ -117,7 +117,7 @@ async def handle_normalize(session: AsyncSession, job, *, router=None) -> dict[s
     # Disliked sender/channel: the user muted these, so no reminder is created (#14).
     from jarvis.services.reminders import is_muted
 
-    if await is_muted(session, event.user_id, source.provider, source.author):
+    if await is_muted(session, event.user_id, source.provider, source.author, source.title):
         await events.mark_processed(event.event_id)
         return {"muted": True, "provider": source.provider, "triage": triage}
 

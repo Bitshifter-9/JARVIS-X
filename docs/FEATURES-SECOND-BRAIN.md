@@ -38,7 +38,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - 🚧 **#14 Preference learning — dislike a reminder.** Thumbs-down a deadline and JARVIS mutes its
   sender/channel: future mail/messages from that source stop becoming reminders, and the ones
   already in the list are cleared. A "Muted" section on Goals lists them, un-mute to reverse.
-  The first slice of the reject→learn loop; a full ranker over every accept/edit comes later.
+  Mirrored phone notifications are muted **per chat/group**, not per app — silencing one WhatsApp
+  group leaves the rest. The first slice of the reject→learn loop; a full ranker comes later.
 - ✅ **#28 Dropped-thread finder** — an "Owe a reply?" card: people who asked you something a few
   hours ago that you may not have answered (from the triage `needs_reply` reads), muted senders
   excluded so it composes with the dislike learning above.

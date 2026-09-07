@@ -115,3 +115,37 @@ async def test_endpoints(client, session):
 
     assert (await client.delete(f"/v1/reminders/mutes/{mutes[0]['id']}", headers=auth)).json()["ok"]
     assert (await client.get("/v1/reminders/mutes", headers=auth)).json() == []
+
+
+async def _phone_task(session, user_id, oid, app, chat):
+    # A mirrored phone notification: provider "phone", author = the app label (same for every
+    # chat), the chat/group name in the title. This is how WhatsApp reminders arrive.
+    src = SourceObject(user_id=user_id, provider="phone", object_id=oid, kind="notification",
+                       title=chat, author=app, occurred_at=datetime.now(UTC))
+    session.add(src)
+    await session.flush()
+    return await GoalService(session).create_task(
+        user_id, title=f"{chat} deadline", due_at=datetime.now(UTC) + timedelta(days=1),
+        timezone="UTC", source_id=src.id,
+    )
+
+
+async def test_muting_one_whatsapp_chat_spares_the_rest(session, user):
+    fam = await _phone_task(session, user.id, "w1", "WhatsApp", "Family Group")
+    work = await _phone_task(session, user.id, "w2", "WhatsApp", "Work Group")
+    await session.flush()
+
+    result = await reminders.dislike_task(session, user.id, fam.id)
+    assert result["muted"] is True
+    assert result["signature"] == "phone:whatsapp:family group"
+    assert result["dismissed"] == 1  # only the Family Group task, not all WhatsApp
+
+    await session.refresh(fam)
+    await session.refresh(work)
+    assert fam.status == "cancelled"
+    assert work.status == "open"  # a different WhatsApp chat is untouched
+
+    # Future Family Group messages are muted; Work Group and other WhatsApp chats are not.
+    assert await reminders.is_muted(session, user.id, "phone", "WhatsApp", "Family Group") is True
+    assert await reminders.is_muted(session, user.id, "phone", "WhatsApp", "Work Group") is False
+    assert await reminders.is_muted(session, user.id, "phone", "WhatsApp", "Random") is False

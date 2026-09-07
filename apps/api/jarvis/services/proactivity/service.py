@@ -124,7 +124,7 @@ async def owed_replies(
             continue
         if obj is None:
             continue
-        sig = signature_for(obj.provider, obj.author)
+        sig = signature_for(obj.provider, obj.author, obj.title)
         if sig and sig in muted:
             continue
         when = obj.occurred_at or lg.created_at
