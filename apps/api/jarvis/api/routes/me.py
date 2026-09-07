@@ -91,6 +91,16 @@ async def audit_actions(user: CurrentUser, session: SessionDep) -> list[str]:
     return sorted(rows)
 
 
+@router.get("/rhythm")
+async def rhythm(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Your energy curve by hour — when you focus and when you slump (#15), so nudges land
+    when you're receptive."""
+    from jarvis.services.rhythm import rhythm as compute_rhythm
+
+    tz = user.timezone or get_settings().timezone
+    return await compute_rhythm(session, user.id, tz=tz)
+
+
 @router.get("/focus")
 async def focus(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     """The one thing to do now, plus what has slipped (FEATURES-50 8/9)."""

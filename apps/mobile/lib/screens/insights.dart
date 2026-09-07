@@ -30,6 +30,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _phrasebook = const [];
   List<Map<String, dynamic>> _people = const [];
   Map<String, dynamic> _interests = const {};
+  Map<String, dynamic> _rhythm = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -64,6 +65,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.phrasebook(),
         client.relationships(),
         client.interests(),
+        client.rhythm(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -82,6 +84,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _phrasebook = results[12] as List<Map<String, dynamic>>;
         _people = results[13] as List<Map<String, dynamic>>;
         _interests = results[14] as Map<String, dynamic>;
+        _rhythm = results[15] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -181,6 +184,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_hasDrift) _InterestsCard(drift: _interests),
                       if (_phrasebook.isNotEmpty) const SizedBox(height: 8),
                       if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
+                      if (_rhythm['enough_data'] == true) const SizedBox(height: 8),
+                      if (_rhythm['enough_data'] == true) _RhythmCard(rhythm: _rhythm),
                     ],
                   ),
                 ),
@@ -829,4 +834,79 @@ class _InterestsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+
+/// Your rhythm (#15): the energy curve by hour — when you focus and when you slump — as a
+/// one-line takeaway plus a 24-bar day sparkline. Deterministic from your focus/done history.
+class _RhythmCard extends StatelessWidget {
+  const _RhythmCard({required this.rhythm});
+  final Map<String, dynamic> rhythm;
+
+  static String _hour(int h) {
+    final ampm = h < 12 ? 'am' : 'pm';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return '$h12$ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final byHour = (rhythm['by_hour'] as List<dynamic>? ?? const []).cast<int>();
+    final peak = byHour.isEmpty ? 1 : byHour.reduce((a, b) => a > b ? a : b);
+    final w = rhythm['best_window'] as Map<String, dynamic>?;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.bolt_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Your rhythm', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 4),
+          Text(
+            w == null
+                ? 'When you tend to get things done.'
+                : "You're sharpest around ${_hour(w['start'] as int)}–${_hour(w['end'] as int)}.",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 40,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var h = 0; h < byHour.length; h++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 1),
+                      child: Container(
+                        height: 4 + 34 * (peak == 0 ? 0 : byHour[h] / peak),
+                        decoration: BoxDecoration(
+                          color: (w != null &&
+                                  _inWindow(h, w['start'] as int, w['end'] as int))
+                              ? scheme.primary
+                              : scheme.primary.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('12am', style: Theme.of(context).textTheme.labelSmall),
+            Text('12pm', style: Theme.of(context).textTheme.labelSmall),
+            Text('11pm', style: Theme.of(context).textTheme.labelSmall),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  static bool _inWindow(int h, int start, int end) =>
+      start <= end ? (h >= start && h < end) : (h >= start || h < end);
 }

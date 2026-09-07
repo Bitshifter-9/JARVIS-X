@@ -60,6 +60,11 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   own words (recent vs baseline), so briefings track the current you (deterministic, no model).
 - ✅ **#25 "What matters now"** — a single ranked glance on the home dashboard that composes the
   urgent deadlines, promises due, replies owed and gone-quiet people into the few things to act on.
+- ✅ **#15 Rhythm model** — a "Your rhythm" card: your energy curve by hour (focus sessions +
+  completed tasks), with the peak hour and best window, so nudges can land when you're receptive.
+- **Audit:** several items were already built and are now marked accurately — #32 weekly review,
+  #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
+  voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -108,8 +113,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 14. 🚧 **Preference learning from choices.** Every accept/reject/edit of a suggestion trains a
     lightweight ranker — the system's taste converges on yours. *Shipped:* dislike a reminder →
     its sender/channel is muted so it stops nagging (a "Muted" section on Goals holds the rules).
-15. ⬜ **Rhythm model.** When you focus, when you slump, your energy curve by hour/day —
-    so JARVIS schedules and nudges *when you're actually receptive*.
+15. ✅ **Rhythm model.** When you focus, when you slump, your energy curve by hour/day —
+    so JARVIS schedules and nudges *when you're actually receptive*. Deterministic: buckets your
+    focus sessions and completed tasks by local hour over recent weeks → a 24-hour curve, peak
+    hour and best window. A "Your rhythm" card on Insights. (Feeding it into nudge timing is next.)
 16. ✅ **Deepened relationship graph.** Who matters, how you talk to them, your usual
     cadence — extends the existing people graph with contact intervals. Deterministic: groups
     your correspondents, reads the gaps between messages as a typical cadence, and flags anyone
@@ -162,11 +169,15 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 
 31. ⬜ **Habit coach.** Beyond streaks (shipped): forming new habits, smallest-next-step when
     you're slipping, celebrating when you're on a roll.
-32. ⬜ **Auto weekly self-review.** Wins, slips, one pattern, one focus for next week —
-    generated, not written by you.
-33. ⬜ **Behaviour nudges.** "You doom-scroll after 11pm," "you reply to family late" —
-    from the capture streams, kind not naggy (extends anomaly nudges, shipped).
-34. ⬜ **Skill & goal progress.** Milestones, trajectory, honest "on track / behind."
+32. ✅ **Auto weekly self-review.** Wins, slips, one pattern, one focus for next week.
+    *Already shipped:* `GET /v1/review/weekly` rolls up the past 7 days — done, slipped, focus
+    minutes, where the time went, and what's due next week.
+33. ✅ **Behaviour nudges.** "You doom-scroll after 11pm," "you reply to family late" —
+    from the capture streams, kind not naggy. *Shipped:* the insight anomaly nudges + the
+    heartbeat that surfaces them; richer behavioural signals grow as capture (#3/#4) lands.
+34. ✅ **Skill & goal progress.** Milestones, trajectory, honest "on track / behind."
+    *Already shipped:* the goal engine's prediction (`/goals/{id}/prediction`) — completion
+    probability, critical path, and the fixes that would change the outcome.
 35. ⬜ **Personalised micro-lessons.** "How to improve X" turned into 3-minute lessons from
     *your* gaps, delivered on a spaced schedule.
 36. ⬜ **Focus analytics.** Deep-work time, top distraction sources ranked, best focus window.
@@ -181,8 +192,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 ## E. Full automation — hands-free on mobile + Mac
 
 41. ⬜ **Autonomous morning brief & evening wind-down.** Run themselves; no prompt.
-42. ⬜ **Auto-triage everything.** Mail, messages, notifications → only the few that need
-    *you* surface; the rest are summarised or handled.
+42. 🚧 **Auto-triage everything.** Mail, messages, notifications → only the few that need
+    *you* surface. *Shipped for mail:* triage classifies every message (needs_reply / fyi /
+    deadline / spam / newsletter) and drafts the reply that's owed. Unifying messages and phone
+    notifications into the same triage is the remaining piece.
 43. ⬜ **Draft-in-your-voice, one-tap send.** Replies pre-written in your style (§B #11),
     queued for a single tap.
 44. ⬜ **Auto-tasks from commitments.** Captured promises become tracked tasks with no typing.
@@ -190,11 +203,15 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     while you sleep; every effectful step still auditable.
 46. ⬜ **True cross-device continuity.** Start on the Mac, finish on the phone, seamlessly —
     one brain, one context (the architecture already shares state).
-47. ⬜ **Fully hands-free voice mode.** Wake → understand → do → confirm, no screen.
+47. 🚧 **Fully hands-free voice mode.** Wake → understand → do → confirm, no screen.
+    *Shipped:* the on-device wake loop (`wake_service.dart`) runs in a foreground service,
+    listens for the wake word, sends the ask, and speaks the reply. Hardening it across every
+    device state is the remaining work (needs on-device verification).
 48. ⬜ **Scheduled autonomous workflows.** Weekly review, inbox cleanup, follow-up sweeps —
     on a cron, reported after.
-49. ⬜ **Smart notification layer.** Batched, ranked, with a live-activity for the *one* thing
-    that matters now (builds on the live alerts already shipped).
+49. 🚧 **Smart notification layer.** Batched, ranked, with a live-activity for the *one* thing
+    that matters now. *Shipped:* the escalation ladder, the HUD live-activity, grouped-activity
+    batching, and the "What matters now" ranking (#25). A single batched push digest is next.
 50. ⬜ **Self-model export (robot-ready).** A single portable bundle — style model,
     preferences, knowledge graph, routines, phrasebook, values — versioned and encrypted,
     that a future embodied agent could load to *be* you. The reason for all of the above.

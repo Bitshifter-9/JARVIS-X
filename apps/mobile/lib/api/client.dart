@@ -621,6 +621,10 @@ class JarvisClient {
   Future<Map<String, dynamic>> capture(String text) async =>
       await _send('POST', '/v1/capture', body: {'text': text}) as Map<String, dynamic>;
 
+  /// Rhythm: your energy curve by hour — when you focus and when you slump (#15).
+  Future<Map<String, dynamic>> rhythm() async =>
+      await _send('GET', '/v1/rhythm') as Map<String, dynamic>;
+
   /// Interest drift: topics rising/fading in your own words (second-brain #17).
   Future<Map<String, dynamic>> interests() async =>
       await _send('GET', '/v1/interests') as Map<String, dynamic>;
