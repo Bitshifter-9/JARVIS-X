@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -53,6 +54,7 @@ class DeviceOut(BaseModel):
     last_seen_at: str | None
     allowed_bundle_ids: list[str]
     capabilities: list[str] = Field(default_factory=list)
+    last_location: dict[str, Any] | None = None
 
 
 @router.post("/pair")
@@ -252,6 +254,7 @@ async def _device_out(devices: DeviceService, device) -> DeviceOut:  # noqa: ANN
         last_seen_at=device.last_seen_at.isoformat() if device.last_seen_at else None,
         allowed_bundle_ids=device.allowed_bundle_ids,
         capabilities=device.capabilities,
+        last_location=device.last_location,
     )
 
 
@@ -292,8 +295,19 @@ async def server_public_key(_user: CurrentUser) -> dict[str, str]:
 async def complete_device_action(session, action, observed: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN001
     """What happens when a device reports back: the verdict, the artifact to Telegram,
     and — for the eyes (PLAN.md 10.7) — one description of what was captured."""
-    from jarvis.db.models.ops import Artifact, AuditLog
+    from jarvis.db.models.ops import Artifact, AuditLog, Device
     from jarvis.services.vision import VISION_TOOLS, describe_artifact
+
+    # Find-my-devices (#24): remember where a device reported it was.
+    if action.tool == "phone.locate" and observed.get("lat") is not None and action.device_id:
+        device = await session.get(Device, action.device_id)
+        if device is not None and device.user_id == action.user_id:
+            device.last_location = {
+                "lat": observed.get("lat"),
+                "lng": observed.get("lng"),
+                "accuracy_m": observed.get("accuracy_m"),
+                "at": datetime.now(UTC).isoformat(),
+            }
 
     outcome = await EvidenceService(session).verify(action, observed)
     artifact_id = observed.get("artifact_id")

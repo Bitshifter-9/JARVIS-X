@@ -9,6 +9,7 @@ import '../node/phone_node.dart';
 import '../node/notification_mirror.dart';
 import '../state/providers.dart';
 import '../theme.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Devices: what can act on your behalf, and how to stop it.
 class DevicesScreen extends ConsumerWidget {
@@ -450,6 +451,7 @@ class _PhoneCardState extends ConsumerState<_PhoneCard> {
                 style: Theme.of(context).textTheme.bodySmall),
             _RemoveButton(device: d),
           ]),
+          if (d.lastLocation != null) _LastLocation(location: d.lastLocation!),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
             PopupMenuButton<String>(
@@ -979,5 +981,50 @@ Future<void> editDeviceAllowlist(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+}
+
+/// A device's last known location (FEATURES-50 #24, find-my-devices). Tap "Locate" to
+/// refresh it; open it on a map here.
+class _LastLocation extends StatelessWidget {
+  const _LastLocation({required this.location});
+
+  final Map<String, dynamic> location;
+
+  @override
+  Widget build(BuildContext context) {
+    final lat = location['lat'];
+    final lng = location['lng'];
+    if (lat == null || lng == null) return const SizedBox.shrink();
+    final at = location['at'] != null ? DateTime.tryParse(location['at'] as String) : null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(children: [
+        Icon(Icons.place, size: 16, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Last seen near ${(lat as num).toStringAsFixed(4)}, '
+            '${(lng as num).toStringAsFixed(4)}'
+            '${at != null ? ' · ${_ago(at.toLocal())}' : ''}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        TextButton(
+          onPressed: () => launchUrl(
+            Uri.parse('https://maps.google.com/?q=$lat,$lng'),
+            mode: LaunchMode.externalApplication,
+          ),
+          child: const Text('Map'),
+        ),
+      ]),
+    );
+  }
+
+  static String _ago(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
   }
 }

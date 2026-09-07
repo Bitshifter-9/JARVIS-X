@@ -73,6 +73,8 @@ class Device(UUIDPrimaryKey, Timestamps, Base):
     # Enforced again at the helper. Two independent checks, because one can be bypassed.
     allowed_bundle_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     capabilities: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # Last known location, set when a phone.locate completes: {lat, lng, at} (#24).
+    last_location: Mapped[dict | None] = mapped_column(JSONB)
 
     @property
     def is_active(self) -> bool:

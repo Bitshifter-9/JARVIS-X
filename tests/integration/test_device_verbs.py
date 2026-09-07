@@ -84,3 +84,31 @@ async def test_ring_is_covered_by_the_trust_switch_but_locate_and_call_wait(clie
         user.id, tool="phone.whatsapp_send", args={"phone": "1", "text": "hi"}
     )
     assert not wa.needs_approval
+
+
+async def test_completing_a_locate_stores_the_last_location(client, session, user):
+    """Find-my-devices (FEATURES-50 #24): a phone.locate result lands on the device row."""
+    from jarvis.api.routes.devices import complete_device_action
+    from jarvis.db.models.ops import Device
+    from jarvis.services.agent.executor import ToolExecutor
+
+    phone = await _phone(session, user.id)
+    r = await client.post(
+        "/v1/auth/login", json={"email": "verbs@example.com", "password": PASSWORD}
+    )
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    await client.post("/v1/permissions/trust-devices", json={"days": 7}, headers=auth)
+
+    proposal = await ToolGateway(session).propose(user.id, tool="phone.locate", args={})
+    await session.commit()
+    action = await ToolGateway(session).authorize_dispatch(proposal.action.id)
+    await ToolExecutor(session).run(action)  # addresses it to the phone
+
+    await complete_device_action(
+        session, action, {"status": 200, "lat": 12.97, "lng": 77.59, "accuracy_m": 8}
+    )
+    await session.commit()
+
+    stored = await session.get(Device, phone.id)
+    assert stored.last_location["lat"] == 12.97 and stored.last_location["lng"] == 77.59
+    assert stored.last_location["at"]
