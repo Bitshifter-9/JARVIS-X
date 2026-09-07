@@ -612,6 +612,10 @@ class JarvisClient {
   Future<Map<String, dynamic>> capture(String text) async =>
       await _send('POST', '/v1/capture', body: {'text': text}) as Map<String, dynamic>;
 
+  /// Ask your life a question, get a sourced answer (second-brain #23).
+  Future<Map<String, dynamic>> askLife(String question) async =>
+      await _send('POST', '/v1/recall', body: {'question': question}) as Map<String, dynamic>;
+
   /// Life search: one box over everything captured (second-brain #26).
   Future<List<Map<String, dynamic>>> lifeSearch(String q) async {
     final data = await _send('GET', '/v1/search', query: {'q': q}) as Map<String, dynamic>;

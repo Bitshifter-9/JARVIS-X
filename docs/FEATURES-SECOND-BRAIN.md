@@ -45,6 +45,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#21 Spaced-repetition resurfacing** — a "Worth remembering" card brings important memories
   back on a doubling forgetting curve, so what you learned once doesn't evaporate ("what I forget
   that are important"). Curve advances server-side, paced to at most once a day.
+- ✅ **#23 Instant contextual recall** — "Ask JARVIS" in the search box answers a question from
+  your whole captured world (mail, deadlines, chat, memory) with each claim sourced; free keyword
+  retrieval, cascade synthesis (local/free first), degrades to the sources if no model answers.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -110,8 +113,12 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     "Worth remembering" card on Insights shows the current set, paced to at most once a day.
 22. ✅ **Commitment tracking.** "I'll send it Friday," "let's do coffee next week" — extracted
     from your messages and tracked to done, so you keep your word.
-23. ⬜ **Instant contextual recall.** "What did I decide about the API?" → answered from
-    everything captured, each claim with a source (GraphRAG over your life).
+23. ✅ **Instant contextual recall.** "What did I decide about the API?" → answered from
+    everything captured, each claim with a source. Retrieval is the free keyword tier (per-word
+    search + merge over mail, deadlines, chat, memory); synthesis runs the LLM cascade
+    (free/local first, a paid call only because *you* asked) and degrades to the ranked sources
+    if no model answers. An "Ask JARVIS" action in the life-search box. (Semantic/GraphRAG
+    re-ranking is the later optimisation.)
 24. ✅ **About-to-forget reminders.** Surfaces the thing *just before* you need it — the name
     before the meeting, the gift before the birthday, the promise before you see them.
 25. ⬜ **"What mattered" digest.** Auto daily/weekly rollup of the few things that mattered

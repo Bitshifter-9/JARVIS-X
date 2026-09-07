@@ -40,6 +40,7 @@ from jarvis.api.routes import (
     personas,
     proactivity,
     profile,
+    recall,
     reminders,
     routines,
     runs,
@@ -184,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(clipboard.router)
     app.include_router(graph.router)
     app.include_router(proactivity.router)
+    app.include_router(recall.router)
     app.include_router(reminders.router)
     app.include_router(permissions.router)
 

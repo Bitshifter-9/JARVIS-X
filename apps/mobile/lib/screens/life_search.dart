@@ -30,6 +30,8 @@ class _LifeSearchSheetState extends ConsumerState<_LifeSearchSheet> {
   Timer? _debounce;
   List<Map<String, dynamic>> _results = const [];
   bool _busy = false;
+  bool _asking = false;
+  Map<String, dynamic>? _answer; // {answer, sources, grounded} from #23
   String _q = '';
 
   @override
@@ -43,10 +45,28 @@ class _LifeSearchSheetState extends ConsumerState<_LifeSearchSheet> {
     _q = v.trim();
     _debounce?.cancel();
     if (_q.length < 2) {
-      setState(() => _results = const []);
+      setState(() {
+        _results = const [];
+        _answer = null;
+      });
       return;
     }
+    setState(() => _answer = null); // a new query invalidates the old answer
     _debounce = Timer(const Duration(milliseconds: 280), _run);
+  }
+
+  Future<void> _ask() async {
+    final q = _q;
+    if (q.length < 3) return;
+    setState(() => _asking = true);
+    try {
+      final r = await ref.read(clientProvider).askLife(q);
+      if (mounted && q == _q) setState(() => _answer = r);
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _asking = false);
+    }
   }
 
   Future<void> _run() async {
@@ -97,6 +117,22 @@ class _LifeSearchSheetState extends ConsumerState<_LifeSearchSheet> {
               ),
             ),
           ),
+          if (_q.length >= 3)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: TextButton.icon(
+                  onPressed: _asking ? null : _ask,
+                  icon: _asking
+                      ? const SizedBox(
+                          width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome, size: 18),
+                  label: Text(_asking ? 'Thinking…' : 'Ask JARVIS about "$_q"'),
+                ),
+              ),
+            ),
+          if (_answer != null) _AnswerCard(answer: _answer!),
           Expanded(
             child: _q.length < 2
                 ? Center(
@@ -157,5 +193,55 @@ class _LifeSearchSheetState extends ConsumerState<_LifeSearchSheet> {
     if (d.inHours < 24) return '${d.inHours}h ago';
     if (d.inDays < 30) return '${d.inDays}d ago';
     return '${(d.inDays / 30).floor()}mo ago';
+  }
+}
+
+/// The sourced answer for #23 (instant contextual recall): a short synthesised answer over
+/// everything captured, with the sources it drew from. If no model answered, we show the
+/// sources alone — still a useful result.
+class _AnswerCard extends StatelessWidget {
+  const _AnswerCard({required this.answer});
+  final Map<String, dynamic> answer;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = answer['answer'] as String?;
+    final sources = (answer['sources'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.auto_awesome, size: 18, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 8),
+            Text('Answer', style: Theme.of(context).textTheme.titleSmall),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            text ?? "No synthesised answer right now — here's what I found:",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (sources.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Sources', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
+            for (final s in sources)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  '[${s['n']}] ${s['title'] ?? ''}'
+                  '${s['who'] != null ? ' · ${s['who']}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
+          ],
+        ]),
+      ),
+    );
   }
 }
