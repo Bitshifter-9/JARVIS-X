@@ -336,7 +336,8 @@ async def _reply(
             from jarvis.workers.notify import build_senders
 
             await NotificationService(session, senders=build_senders(session)).notify(
-                user_id, title=str(reply_to.get("title") or "Jarvis"), body=text[:400]
+                user_id, title=str(reply_to.get("title") or "Jarvis"), body=text[:400],
+                data={"kind": "agent"},
             )
     except Exception as exc:  # noqa: BLE001 — the run is recorded; a lost reply is not fatal
         log.warning("agent_reply_failed", channel=channel, error=str(exc)[:200])

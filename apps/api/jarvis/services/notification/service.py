@@ -89,6 +89,7 @@ class NotificationService:
         due_at: datetime | None = None,
         acknowledged: bool = False,
         now: datetime | None = None,
+        data: dict | None = None,
     ) -> DeliveryResult:
         moment = now or datetime.now(UTC)
         prefs = await self.preferences(user_id)
@@ -117,7 +118,7 @@ class NotificationService:
         if endpoint is None or sender is None:
             return DeliveryResult(plan=plan, delivered=False)
 
-        await sender.send(endpoint.address, title=title, body=body, task_id=task_id)
+        await sender.send(endpoint.address, title=title, body=body, task_id=task_id, data=data)
         endpoint.last_used_at = moment
 
         self.session.add(

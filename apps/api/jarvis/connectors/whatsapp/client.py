@@ -76,7 +76,9 @@ class WhatsAppSender:
         self.template = template
         self.timeout = timeout
 
-    async def send(self, address: str, *, title: str, body: str, task_id=None) -> dict[str, Any]:  # noqa: ANN001, ARG002
+    async def send(  # noqa: ANN001, ARG002
+        self, address: str, *, title: str, body: str, task_id=None, data=None
+    ) -> dict[str, Any]:
         if not (self.phone_number_id and self.access_token):
             raise RuntimeError("WhatsApp is not configured")
 

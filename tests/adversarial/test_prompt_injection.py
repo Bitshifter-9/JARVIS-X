@@ -285,7 +285,7 @@ async def test_a_notification_storm_is_capped(session, user):
         def __init__(self):
             self.sent = 0
 
-        async def send(self, address, *, title, body, task_id=None):  # noqa: ANN001, ARG002
+        async def send(self, address, *, title, body, task_id=None, data=None):  # noqa: ANN001, ARG002
             self.sent += 1
 
     settings = get_settings()

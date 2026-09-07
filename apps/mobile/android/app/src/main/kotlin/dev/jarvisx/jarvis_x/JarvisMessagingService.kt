@@ -22,6 +22,7 @@ class JarvisMessagingService : FirebaseMessagingService() {
         val open = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("task_id", message.data["task_id"])
+            putExtra("route", message.data["route"]) // deep-link target (FEATURES-50 notifications)
         }
         val pending = PendingIntent.getActivity(
             this, 0, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

@@ -61,11 +61,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _refresh = Timer.periodic(const Duration(seconds: 45), (_) => _refreshTab(_current));
     _restoreTab(); // continue where we left off (FEATURES-50 #20)
     Net.offline.addListener(_onNet); // offline banner + replay (FEATURES-50 #46)
+    _setupNotificationNav(); // tap a notification → jump to the right tab
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Changelog.showIfNew(context); // what's new, once (FEATURES-50 #43)
       Outbox.flush(ref.read(clientProvider)); // replay anything queued last session
     });
+  }
+
+  // A tapped notification carries a route; open the matching tab.
+  static const _routeToTab = {'home': 1, 'goals': 3, 'approvals': 4, 'timeline': 5, 'insights': 10};
+
+  void _setupNotificationNav() {
+    const channel = MethodChannel('jarvis/nav');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'route') _goToRoute(call.arguments as String?);
+      return null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        _goToRoute(await channel.invokeMethod<String>('consumeInitialRoute'));
+      } catch (_) {
+        // Not Android / no channel — nothing to consume.
+      }
+    });
+  }
+
+  void _goToRoute(String? route) {
+    final i = _routeToTab[route];
+    if (i != null && i < _all.length && mounted) _index = i;
   }
 
   void _onNet() {

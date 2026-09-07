@@ -126,7 +126,9 @@ class TwilioCaller:
         log.info("twilio_call_placed", sid=data_out.get("sid"), status=data_out.get("status"))
         return data_out
 
-    async def send(self, address: str, *, title: str, body: str, task_id=None) -> dict[str, Any]:  # noqa: ANN001, ARG002
+    async def send(  # noqa: ANN001, ARG002
+        self, address: str, *, title: str, body: str, task_id=None, data=None
+    ) -> dict[str, Any]:
         return await self._post(
             {"To": address, "From": self.from_number, "Twiml": twiml_for(title, body)}
         )

@@ -39,7 +39,7 @@ class TelegramSender:
         self.session = session
         self.transport = transport
 
-    async def send(self, address: str, *, title: str, body: str, task_id=None) -> None:  # noqa: ANN001
+    async def send(self, address: str, *, title: str, body: str, task_id=None, data=None) -> None:  # noqa: ANN001, ARG002
         from jarvis.connectors.telegram.service import TelegramService
         from jarvis.db.models.domain import Task
 
@@ -163,7 +163,10 @@ async def handle_approval(
             None,
         )
         if push is not None and endpoint is not None:
-            await push.send(endpoint.address, title="Approval needed", body=summary)
+            await push.send(
+                endpoint.address, title="Approval needed", body=summary,
+                data={"kind": "approval", "id": str(approval.id)},
+            )
             pushed = True
         minutes = s.twilio_call_for_approval_after_minutes
         if minutes > 0:

@@ -24,16 +24,40 @@ SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 CHANNEL_ID = "jarvis_alerts"  # matches the Android notification channel the app creates
 
 
+# Where a notification of each kind should open the app.
+_ROUTE_FOR_KIND = {
+    "deadline": "goals",
+    "approval": "approvals",
+    "agent": "timeline",
+    "mail": "insights",
+    "digest": "home",
+}
+
+
 def message_payload(
-    token: str, *, title: str, body: str, task_id: str | None = None
+    token: str,
+    *,
+    title: str,
+    body: str,
+    task_id: str | None = None,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The exact v1 body. Data *and* notification: data reaches the app in every state,
-    notification lets Android show it even if the app process is dead."""
+    notification lets Android show it even if the app process is dead. ``data`` may carry
+    a ``kind`` and an entity ``id``; the app taps through to the matching screen."""
+    extra = {str(k): str(v) for k, v in (data or {}).items() if v is not None}
+    kind = extra.get("kind", "deadline")
+    payload_data = {
+        "task_id": task_id or "",
+        "kind": kind,
+        "route": extra.get("route", _ROUTE_FOR_KIND.get(kind, "home")),
+        **extra,
+    }
     return {
         "message": {
             "token": token,
             "notification": {"title": title[:200], "body": body[:1000]},
-            "data": {"task_id": task_id or "", "kind": "deadline"},
+            "data": payload_data,
             "android": {
                 "priority": "high",
                 "notification": {"channel_id": CHANNEL_ID, "sound": "default"},
@@ -73,9 +97,11 @@ class FcmSender:
             self._creds.refresh(Request())
         return str(self._creds.token)
 
-    async def send(self, address: str, *, title: str, body: str, task_id=None) -> dict[str, Any]:  # noqa: ANN001
+    async def send(  # noqa: ANN001
+        self, address: str, *, title: str, body: str, task_id=None, data=None
+    ) -> dict[str, Any]:
         payload = message_payload(
-            address, title=title, body=body, task_id=str(task_id) if task_id else None
+            address, title=title, body=body, task_id=str(task_id) if task_id else None, data=data
         )
         if self._transport is not None:
             status = await self._transport(payload)

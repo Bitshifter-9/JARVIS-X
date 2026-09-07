@@ -19,9 +19,34 @@ import io.flutter.plugin.common.MethodChannel
  * the app after sign-in, so nothing account-specific is compiled into the APK.
  */
 class MainActivity : FlutterActivity() {
+    private var navChannel: MethodChannel? = null
+    private var pendingRoute: String? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val route = intent.getStringExtra("route")
+        if (!route.isNullOrEmpty()) {
+            // App already running: tell Flutter to navigate now.
+            navChannel?.invokeMethod("route", route) ?: run { pendingRoute = route }
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         ensureAlertChannel(this)
+        // A notification tap carries a route; the app consumes it on start and on tap.
+        pendingRoute = intent?.getStringExtra("route")
+        navChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/nav")
+        navChannel!!.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "consumeInitialRoute" -> {
+                    result.success(pendingRoute)
+                    pendingRoute = null
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/push").setMethodCallHandler { call, result ->
             when (call.method) {
                 "init" -> {

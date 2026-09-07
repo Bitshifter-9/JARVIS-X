@@ -41,7 +41,7 @@ class RecordingPush:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, str]] = []
 
-    async def send(self, address, *, title, body, task_id=None):  # noqa: ANN001
+    async def send(self, address, *, title, body, task_id=None, data=None):  # noqa: ANN001, ARG002
         self.sent.append((address, title, body))
 
 

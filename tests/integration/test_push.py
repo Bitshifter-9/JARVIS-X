@@ -84,6 +84,18 @@ def test_the_fcm_body_reaches_the_app_in_every_state():
     assert message["notification"] == {"title": "Report", "body": "Due in 2 hours"}
     assert message["data"]["task_id"] == "t1"
     assert message["android"]["notification"]["channel_id"] == "jarvis_alerts"
+    # A deadline routes to Goals by default.
+    assert message["data"]["route"] == "goals"
+
+
+def test_the_payload_deep_links_by_kind():
+    # An approval carries its id and routes to the Approvals tab (interactive notifications).
+    p = message_payload("tok", title="Approval needed", body="Email your prof",
+                        data={"kind": "approval", "id": "a1"})
+    data = p["message"]["data"]
+    assert data["kind"] == "approval" and data["route"] == "approvals" and data["id"] == "a1"
+    # Every data value is a string, as FCM requires.
+    assert all(isinstance(v, str) for v in data.values())
 
 
 async def test_a_rejected_push_falls_through_to_the_next_rung():
