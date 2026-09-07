@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
 import '../state/providers.dart';
@@ -24,6 +25,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _anomalies = const [];
   List<Map<String, dynamic>> _commitments = const [];
   List<Map<String, dynamic>> _upcoming = const [];
+  List<Map<String, dynamic>> _owed = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -53,6 +55,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.anomalies(),
         client.commitments(),
         client.upcoming(),
+        client.owedReplies(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -66,6 +69,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _anomalies = results[7] as List<Map<String, dynamic>>;
         _commitments = results[8] as List<Map<String, dynamic>>;
         _upcoming = results[9] as List<Map<String, dynamic>>;
+        _owed = results[10] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -121,6 +125,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                     children: [
                       if (_upcoming.isNotEmpty) _ComingUpCard(items: _upcoming),
                       if (_upcoming.isNotEmpty) const SizedBox(height: 8),
+                      if (_owed.isNotEmpty) _OwedRepliesCard(items: _owed),
+                      if (_owed.isNotEmpty) const SizedBox(height: 8),
                       if (_commitments.isNotEmpty)
                         _CommitmentsCard(
                           commitments: _commitments,
@@ -552,5 +558,59 @@ class _ComingUpCard extends StatelessWidget {
     if (left.inHours < 1) return '${left.inMinutes}m';
     if (left.inHours < 24) return '${left.inHours}h';
     return '${left.inDays}d';
+  }
+}
+
+
+/// Dropped-thread finder: people who asked something you may owe a reply (second-brain
+/// #28). Read off the triage 'needs_reply' classifications; muted senders are excluded.
+class _OwedRepliesCard extends StatelessWidget {
+  const _OwedRepliesCard({required this.items});
+  final List<Map<String, dynamic>> items;
+
+  static String _name(String raw) =>
+      raw.replaceAll(RegExp(r'<[^>]*>'), '').trim().replaceAll(RegExp(r'^"|"$'), '');
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.reply_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Owe a reply?', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text('They asked you something and may still be waiting.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          for (final it in items)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                it['provider'] == 'gmail' ? Icons.mail_outline : Icons.chat_bubble_outline,
+                size: 20, color: scheme.onTertiaryContainer,
+              ),
+              title: Text(_name(it['sender'] as String? ?? 'someone'),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(it['subject'] as String? ?? '',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: it['url'] == null
+                  ? null
+                  : const Icon(Icons.open_in_new, size: 16),
+              onTap: it['url'] == null
+                  ? null
+                  : () => launchUrl(Uri.parse(it['url'] as String),
+                      mode: LaunchMode.externalApplication),
+            ),
+        ]),
+      ),
+    );
   }
 }

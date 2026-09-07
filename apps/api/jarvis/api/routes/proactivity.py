@@ -8,7 +8,12 @@ from fastapi import APIRouter
 
 from jarvis.api.deps import CurrentUser, SessionDep
 from jarvis.core.config import get_settings
-from jarvis.services.proactivity import coming_up, habit_streaks, meeting_prep
+from jarvis.services.proactivity import (
+    coming_up,
+    habit_streaks,
+    meeting_prep,
+    owed_replies,
+)
 
 router = APIRouter(prefix="/v1/proactivity", tags=["proactivity"])
 
@@ -30,3 +35,11 @@ async def upcoming(
 async def meeting(user: CurrentUser, session: SessionDep) -> dict[str, Any] | None:
     tz = user.timezone or get_settings().timezone
     return await meeting_prep(session, user.id, tz=tz)
+
+
+@router.get("/owed")
+async def owed(
+    user: CurrentUser, session: SessionDep, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Dropped-thread finder (#28): people who asked you something you may owe a reply."""
+    return await owed_replies(session, user.id, limit=limit)

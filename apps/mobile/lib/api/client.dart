@@ -573,6 +573,10 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> upcoming() async =>
       (await _send('GET', '/v1/proactivity/upcoming') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// Dropped-thread finder: people who asked something you may owe a reply (#28).
+  Future<List<Map<String, dynamic>>> owedReplies() async =>
+      (await _send('GET', '/v1/proactivity/owed') as List<dynamic>).cast<Map<String, dynamic>>();
+
   // ── disliked reminders: mute a sender/channel (#14) ───────────────
   /// Dislike a reminder: mute its sender so future ones stop, and clear the ones
   /// already in the list from that sender. Returns {muted, dismissed, signature}.

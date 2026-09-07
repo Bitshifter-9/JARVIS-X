@@ -83,3 +83,45 @@ async def test_meeting_prep_finds_the_next_event_and_context(session, user):
 
 async def test_meeting_prep_is_none_without_an_upcoming_event(session, user):
     assert await meeting_prep(session, user.id, tz="UTC") is None
+
+
+async def test_owed_replies_finds_unanswered_and_skips_muted(session, user):
+    from jarvis.db.models.domain import ReminderMute
+    from jarvis.db.models.ops import AuditLog
+    from jarvis.services.proactivity import owed_replies
+
+    now = datetime.now(UTC)
+
+    def _needs_reply(oid, sender, subject, *, age_hours):
+        src = SourceObject(
+            user_id=user.id, provider="gmail", object_id=oid, kind="email",
+            title=subject, author=sender, occurred_at=now - timedelta(hours=age_hours),
+        )
+        session.add(src)
+        return src
+
+    a = _needs_reply("o1", "Sam <sam@x.com>", "can you review?", age_hours=10)
+    b = _needs_reply("o2", "Sam <sam@x.com>", "still waiting", age_hours=5)  # same sender, newer
+    c = _needs_reply("o3", "spam@junk.com", "urgent!!", age_hours=8)
+    fresh = _needs_reply("o4", "Nia <nia@x.com>", "quick q", age_hours=1)  # too recent
+    await session.flush()
+
+    for src in (a, b, c, fresh):
+        session.add(AuditLog(
+            user_id=user.id, actor="system", action="triage.classified",
+            subject_type="source_object", subject_id=str(src.id),
+            detail={"category": "needs_reply", "provider": "gmail"},
+        ))
+    # Mute the spammer — the dislike feature composes with this (#14 + #28).
+    session.add(ReminderMute(
+        user_id=user.id, signature="gmail:spam@junk.com",
+        label="Gmail · spam@junk.com", provider="gmail", author="spam@junk.com",
+    ))
+    await session.flush()
+
+    owed = await owed_replies(session, user.id, hours_min=3, days_back=7)
+    senders = [o["sender"] for o in owed]
+    # One row for Sam (the newest), spammer muted, fresh one excluded.
+    assert len(owed) == 1
+    assert "sam@x.com" in senders[0]
+    assert owed[0]["subject"] == "still waiting"

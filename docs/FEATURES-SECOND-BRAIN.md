@@ -39,6 +39,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   sender/channel: future mail/messages from that source stop becoming reminders, and the ones
   already in the list are cleared. A "Muted" section on Goals lists them, un-mute to reverse.
   The first slice of the reject→learn loop; a full ranker over every accept/edit comes later.
+- ✅ **#28 Dropped-thread finder** — an "Owe a reply?" card: people who asked you something a few
+  hours ago that you may not have answered (from the triage `needs_reply` reads), muted senders
+  excluded so it composes with the dislike learning above.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -112,7 +115,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     semantic search, ranked, with time and source.
 27. ⬜ **Rediscover.** Surfaces an old idea/note relevant to what you're doing *right now* —
     serendipity on purpose.
-28. ⬜ **Dropped-thread finder.** Conversations you left hanging, people you owe a reply.
+28. ✅ **Dropped-thread finder.** People who asked you something a few hours ago you may not
+    have answered — read off the triage ``needs_reply`` classifications, one row per sender,
+    muted senders excluded. An "Owe a reply?" card on Insights.
 29. ⬜ **Knowledge-gap detector.** Topics you keep needing but never learned → offered as a
     micro-lesson (feeds §D #35).
 30. ⬜ **Time-travel reconstruction.** "What was I working on last Tuesday?" — a rebuilt day

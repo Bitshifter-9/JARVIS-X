@@ -58,6 +58,101 @@ async def coming_up(
     return out
 
 
+async def owed_replies(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    hours_min: int = 3,
+    days_back: int = 7,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Dropped-thread finder (second-brain #28): people who asked you something recently
+    that you may not have answered. Reads the triage ``needs_reply`` classifications — one
+    row per sender (their most recent), older than a few hours so an in-flight reply isn't
+    flagged — and skips senders you've muted. No model, no new writes."""
+    from jarvis.db.models.domain import ReminderMute
+    from jarvis.db.models.ops import AuditLog
+    from jarvis.services.reminders import signature_for
+
+    now = datetime.now(UTC)
+    # Scan the recent needs_reply classifications; the "how long ago" that matters is the
+    # message's own time, applied below, not when triage happened to log it.
+    logs = (
+        await session.scalars(
+            select(AuditLog)
+            .where(
+                AuditLog.user_id == user_id,
+                AuditLog.action == "triage.classified",
+                AuditLog.detail["category"].astext == "needs_reply",
+                AuditLog.created_at >= now - timedelta(days=days_back + 1),
+            )
+            .order_by(AuditLog.created_at.desc())
+        )
+    ).all()
+    if not logs:
+        return []
+    oldest = now - timedelta(days=days_back)
+    newest = now - timedelta(hours=hours_min)
+
+    muted = set(
+        (
+            await session.scalars(
+                select(ReminderMute.signature).where(ReminderMute.user_id == user_id)
+            )
+        ).all()
+    )
+
+    ids: list[uuid.UUID] = []
+    for lg in logs:
+        try:
+            ids.append(uuid.UUID(lg.subject_id or ""))
+        except (ValueError, TypeError):
+            continue
+    objs = {
+        o.id: o
+        for o in (
+            await session.scalars(select(SourceObject).where(SourceObject.id.in_(ids)))
+        ).all()
+    } if ids else {}
+
+    # Gather qualifying messages, then keep the newest one per sender.
+    candidates: list[tuple[datetime, Any]] = []
+    for lg in logs:
+        try:
+            obj = objs.get(uuid.UUID(lg.subject_id or ""))
+        except (ValueError, TypeError):
+            continue
+        if obj is None:
+            continue
+        sig = signature_for(obj.provider, obj.author)
+        if sig and sig in muted:
+            continue
+        when = obj.occurred_at or lg.created_at
+        if when > newest or when < oldest:  # too recent (reply may be in flight) or too old
+            continue
+        candidates.append((when, obj))
+
+    candidates.sort(key=lambda c: c[0], reverse=True)  # newest message first
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str | None, str]] = set()
+    for when, obj in candidates:
+        key = (obj.provider, (obj.author or "someone").lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "sender": obj.author or "someone",
+            "subject": obj.title,
+            "provider": obj.provider,
+            "when": when.isoformat(),
+            "url": obj.url,
+            "source_id": str(obj.id),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def streak_of(days: set[date], *, today: date) -> dict[str, int]:
     """Current and longest run of consecutive days in ``days``. The current streak counts
     only if it reaches today or yesterday (a gap of one day is grace, two breaks it)."""

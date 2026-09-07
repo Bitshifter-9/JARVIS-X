@@ -4,7 +4,8 @@ from jarvis.services.proactivity.service import (
     coming_up,
     habit_streaks,
     meeting_prep,
+    owed_replies,
     streak_of,
 )
 
-__all__ = ["coming_up", "habit_streaks", "meeting_prep", "streak_of"]
+__all__ = ["coming_up", "habit_streaks", "meeting_prep", "owed_replies", "streak_of"]
