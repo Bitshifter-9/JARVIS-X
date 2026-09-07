@@ -32,6 +32,7 @@ dependencies:
   image_picker: ^1.2.3
   crypto: ^3.0.7
   shared_preferences: ^2.5.5
+  home_widget: ^0.7.0
   geolocator: ^14.0.2
   vibration: ^3.2.1
 dev_dependencies:

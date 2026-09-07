@@ -59,7 +59,7 @@ shippable on its own; the batches below are the order of work.
 45. ✅ Audit log viewer with filters
 46. ✅ Offline banner + queued actions replay
 47. ✅ Accessibility pass (font scale, contrast, labels)
-48. ⬜ Widgets (Android home-screen "next deadline")
+48. ✅ Widgets (Android home-screen "next deadline")
 49. ✅ Localisation scaffold (English first)
 50. ✅ Command palette on Mac (⌘K → searchable actions)
 

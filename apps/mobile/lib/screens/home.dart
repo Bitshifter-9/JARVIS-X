@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/models.dart';
 import '../state/providers.dart';
 import '../state/connectivity.dart';
+import '../live/home_widget_sync.dart';
 import '../theme.dart';
 import '../widgets/orb.dart';
 import 'approvals.dart';
@@ -159,6 +160,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         _refreshTab(next);
         _saveTab(next);
       }
+    });
+    // Keep the home-screen widget's "next deadline" fresh (FEATURES-50 #48).
+    ref.listen(tasksProvider, (_, next) {
+      next.whenData(NextDeadlineWidgetSync.update);
     });
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final pending = (ref.watch(approvalsProvider).valueOrNull ?? const [])

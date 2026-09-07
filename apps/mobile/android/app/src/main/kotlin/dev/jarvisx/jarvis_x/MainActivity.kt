@@ -73,6 +73,25 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        // Live alerts: one ongoing, in-place-updating "live activity" notification that
+        // mirrors Jarvis's current status (FEATURES-50 live alerts).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/live").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "show" -> {
+                    showLive(
+                        call.argument<String>("title") ?: "JARVIS X",
+                        call.argument<String>("body") ?: "",
+                        call.argument<Int>("progress"),
+                    )
+                    result.success(true)
+                }
+                "hide" -> {
+                    (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(LIVE_ID)
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
         // The activity sampler: foreground apps from UsageStatsManager (PLAN.md 10.6.3).
         UsageChannel.attach(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/usage"))
         // The notification mirror: Dart polls what the listener queued (PLAN.md 10.4.4).
@@ -94,6 +113,29 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun showLive(title: String, body: String, progress: Int?) {
+        ensureLiveChannel(this)
+        val open = Intent(this, MainActivity::class.java)
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pending = android.app.PendingIntent.getActivity(
+            this, 1, open,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder = androidx.core.app.NotificationCompat.Builder(this, LIVE_CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setColorized(true)
+            .setCategory(androidx.core.app.NotificationCompat.CATEGORY_STATUS)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pending)
+        if (progress != null) builder.setProgress(100, progress.coerceIn(0, 100), progress < 0)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(LIVE_ID, builder.build())
+    }
+
     private fun isAccessibilityEnabled(): Boolean {
         val flat = Settings.Secure.getString(
             contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
@@ -103,6 +145,23 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val ALERT_CHANNEL = "jarvis_alerts"
+        const val LIVE_CHANNEL = "jarvis_live"
+        const val LIVE_ID = 42
+
+        fun ensureLiveChannel(context: Context) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (manager.getNotificationChannel(LIVE_CHANNEL) == null) {
+                    val channel = NotificationChannel(
+                        LIVE_CHANNEL, "Live status", NotificationManager.IMPORTANCE_LOW
+                    ).apply {
+                        description = "What JARVIS X is doing right now"
+                        setShowBadge(false)
+                    }
+                    manager.createNotificationChannel(channel)
+                }
+            }
+        }
 
         fun ensureAlertChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

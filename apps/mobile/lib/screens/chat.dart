@@ -18,6 +18,7 @@ import '../theme.dart';
 import '../widgets/ambient.dart';
 import '../widgets/orb.dart';
 import 'voice_mode.dart';
+import '../live/live_activity.dart';
 import '../voice/voice_prefs.dart';
 
 /// Talk to Jarvis. Three ways in: type, hold the mic, or enable the wake word and
@@ -78,6 +79,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (_busy) return _JarvisState.thinking;
     if (_listening) return _JarvisState.listening;
     return _JarvisState.idle;
+  }
+
+  /// Mirror Jarvis's live status into an Android live notification (dynamic-island style).
+  void _syncLive() {
+    switch (_state) {
+      case _JarvisState.thinking:
+        LiveActivity.show('JARVIS X', 'Working on it…');
+      case _JarvisState.speaking:
+        LiveActivity.show('JARVIS X', 'Speaking');
+      case _JarvisState.listening:
+        LiveActivity.show('JARVIS X', 'Listening…');
+      case _JarvisState.idle:
+        LiveActivity.hide();
+    }
   }
 
   @override
@@ -320,6 +335,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncLive());
     ref.listen(chatPrefillProvider, (_, next) {
       if (next != null) WidgetsBinding.instance.addPostFrameCallback((_) => _takePrefill());
     });
