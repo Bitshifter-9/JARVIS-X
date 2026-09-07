@@ -230,3 +230,32 @@ async def test_the_graph_is_scoped_to_its_owner(session, user, graph):
 async def test_walking_an_unknown_entity_is_empty_not_an_error(session, user, graph):
     hood = await graph.neighbourhood(user.id, "Nobody")
     assert hood.nodes == {} and hood.edges == []
+
+
+# ── GraphRAG multi-hop answers (FEATURES-50 #35) ───────────────────────
+async def test_graph_answer_walks_two_hops(session, user, graph):
+    prov = {"source": "gmail", "object_id": "m1"}
+    # Report —DEPENDS_ON→ Dataset —OWNS(incoming via)… build a 2-hop chain.
+    await graph.assert_edge(
+        user.id, subject="Report", predicate="DEPENDS_ON", obj="Dataset",
+        provenance=prov, confidence=0.9,
+    )
+    await graph.assert_edge(
+        user.id, subject="Dataset", predicate="ASSIGNED_TO", obj="Priya",
+        provenance=prov, confidence=0.9,
+    )
+    await session.commit()
+
+    # No router → facts are returned verbatim; the 2-hop edge (Dataset→Priya) is reached
+    # from a question that only names "Report".
+    out = await graph.answer(user.id, "Who is the Report connected to?", router=None)
+    assert "Report" in out["entities"]
+    triples = {(f["subject"], f["predicate"], f["object"]) for f in out["facts"]}
+    assert ("Report", "DEPENDS_ON", "Dataset") in triples
+    assert ("Dataset", "ASSIGNED_TO", "Priya") in triples  # the second hop
+    assert out["answer"] and "Priya" in out["answer"]
+
+
+async def test_graph_answer_is_empty_when_nothing_matches(session, user, graph):
+    out = await graph.answer(user.id, "What about the moon?", router=None)
+    assert out == {"answer": None, "facts": [], "entities": []}

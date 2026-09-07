@@ -10,6 +10,7 @@ The rule the whole thing exists to serve: **every edge carries provenance**, so
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -282,6 +283,78 @@ class GraphService:
             result.nodes[row["object"]] = row["object_kind"]
             result.edges.append(_belief(row))
         return result
+
+    async def _entities_in(self, user_id: uuid.UUID, question: str) -> list[str]:
+        """Entity names mentioned in a question, resolved through the graph's aliases.
+        Tries 1–3 word windows so "Dr Sharma" resolves as one name."""
+        words = re.findall(r"[A-Za-z0-9@.'-]+", question)
+        seen_ids: set[uuid.UUID] = set()
+        names: list[str] = []
+        for n in (3, 2, 1):
+            for i in range(len(words) - n + 1):
+                phrase = " ".join(words[i : i + n])
+                if len(phrase) < 3:
+                    continue
+                entity = await self.resolve(user_id, phrase)
+                if entity is not None and entity.id not in seen_ids:
+                    seen_ids.add(entity.id)
+                    names.append(entity.name)
+        return names
+
+    async def answer(
+        self, user_id: uuid.UUID, question: str, *, depth: int = 2, router=None  # noqa: ANN001
+    ) -> dict[str, Any]:
+        """GraphRAG (FEATURES-50 #35): find the entities a question is about, walk the
+        graph up to ``depth`` hops, and answer from the beliefs found — each with its
+        provenance, so the answer is auditable. No model → the facts are returned as-is."""
+        names = await self._entities_in(user_id, question)
+        facts: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for name in names:
+            nb = await self.neighbourhood(user_id, name, depth=depth)
+            for b in nb.edges:
+                key = (b.subject, b.predicate, b.object)
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append(
+                    {
+                        "subject": b.subject,
+                        "predicate": b.predicate,
+                        "object": b.object,
+                        "confidence": round(b.confidence, 2),
+                        "source": b.source,
+                        "confirmed": b.confirmed,
+                    }
+                )
+        answer = await self._synthesise(question, facts, router) if facts else None
+        return {"answer": answer, "facts": facts, "entities": names}
+
+    async def _synthesise(
+        self, question: str, facts: list[dict[str, Any]], router  # noqa: ANN001
+    ) -> str:
+        lines = [f"- {f['subject']} {f['predicate']} {f['object']}" for f in facts[:20]]
+        if router is None:
+            return "From what I know:\n" + "\n".join(lines)
+        from jarvis.llm.types import CallClass, LLMRequest, Message
+
+        prompt = (
+            "Answer the question using ONLY these facts from the user's knowledge graph. "
+            "If they do not answer it, say so. Be concise.\n\n"
+            f"Facts:\n{chr(10).join(lines)}\n\nQuestion: {question}"
+        )
+        try:
+            response = await router.generate(
+                LLMRequest(
+                    call_class=CallClass.CHAT,
+                    messages=[Message("user", prompt)],
+                    max_tokens=300,
+                    temperature=0.2,
+                )
+            )
+            return response.text.strip()
+        except Exception:  # noqa: BLE001 — fall back to the raw facts
+            return "From what I know:\n" + "\n".join(lines)
 
     async def why(self, user_id: uuid.UUID, subject: str, predicate: str, obj: str) -> str:
         """Answer "why do you believe this?" in one sentence, or admit we do not."""
