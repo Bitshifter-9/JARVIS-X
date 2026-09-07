@@ -91,6 +91,16 @@ async def audit_actions(user: CurrentUser, session: SessionDep) -> list[str]:
     return sorted(rows)
 
 
+@router.get("/self-model")
+async def self_model(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """A portable, versioned bundle of everything JARVIS has learned to model you (#50) —
+    style, words, rhythm, relationships, promises and graded decisions. No secrets."""
+    from jarvis.services.self_model import build_self_model
+
+    tz = user.timezone or get_settings().timezone
+    return await build_self_model(session, user.id, tz=tz)
+
+
 @router.get("/mood")
 async def mood(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     """A gentle private sentiment line from your own words (#18) — on your account only."""

@@ -530,6 +530,16 @@ class JarvisClient {
   Future<Map<String, dynamic>> exportData() async =>
       await _send('GET', '/v1/export') as Map<String, dynamic>;
 
+  /// A portable, curated model of you — style, words, rhythm, decisions (#50).
+  Future<Map<String, dynamic>> selfModel() async =>
+      await _send('GET', '/v1/self-model') as Map<String, dynamic>;
+
+  /// Everything you've copied, newest first, optionally filtered (#7).
+  Future<List<Map<String, dynamic>>> clipboardHistory({String? q}) async =>
+      (await _send('GET', '/v1/clipboard/history',
+              query: q == null || q.isEmpty ? null : {'q': q}) as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+
   Future<List<Map<String, dynamic>>> auditLog({String? action}) async {
     final data = await _send('GET', '/v1/audit',
         query: action == null ? null : {'action': action}) as List<dynamic>;

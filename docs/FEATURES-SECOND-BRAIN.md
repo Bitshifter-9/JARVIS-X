@@ -68,6 +68,10 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#39 Decision journal** — log a decision, your reasoning and what you expect; when its
   review date arrives it resurfaces to ask "did it work?" (worked/mixed/didn't), so you learn to
   decide better. A "Decisions" card on Insights.
+- ✅ **#7 Clipboard history** — a searchable, capped history on the synced clipboard, tap to re-copy.
+- ✅ **#50 Self-model export** — a portable, versioned bundle of everything learned about you
+  (persona, style, phrasebook, speech, rhythm, relationships, knowledge, promises, decisions),
+  exported from Settings. The roadmap's capstone — the seed of "a robot of myself."
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -94,8 +98,8 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    gym / a friend's) from the phone's coarse location, as context, not a map.
 6. ⬜ **Media diary.** What you watched/listened to, with a one-line "why it mattered / what
    you took from it," so consumption becomes recall-able knowledge.
-7. ⬜ **Clipboard history.** A searchable timeline of everything you copied (building on the
-   synced clipboard already shipped).
+7. ✅ **Clipboard history.** A searchable timeline of everything you copied, kept on the synced
+   clipboard (capped, newest-first, tap to re-copy). A "History" view on the Devices clipboard card.
 8. ⬜ **Photo & screenshot semantic index.** On-device caption + OCR every image once, store
    the caption, make your camera roll searchable ("that receipt from Goa").
 9. ✅ **One-tap / voice quick-capture.** Hold-to-talk anywhere → transcribed, classified,
@@ -221,9 +225,11 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 49. 🚧 **Smart notification layer.** Batched, ranked, with a live-activity for the *one* thing
     that matters now. *Shipped:* the escalation ladder, the HUD live-activity, grouped-activity
     batching, and the "What matters now" ranking (#25). A single batched push digest is next.
-50. ⬜ **Self-model export (robot-ready).** A single portable bundle — style model,
-    preferences, knowledge graph, routines, phrasebook, values — versioned and encrypted,
-    that a future embodied agent could load to *be* you. The reason for all of the above.
+50. ✅ **Self-model export (robot-ready).** A single portable, versioned bundle — persona, style,
+    phrasebook, speech pattern, rhythm, interests, relationships, top knowledge, open promises and
+    graded decisions — that a future embodied agent could load to *be* you. `GET /v1/self-model`,
+    exported from Settings → Your data. No secrets. (Client-side encryption of the bundle is the
+    next hardening step; today it's yours to keep, copied to your clipboard.)
 
 ---
 

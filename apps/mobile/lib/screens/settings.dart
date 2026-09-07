@@ -693,6 +693,37 @@ class _YourData extends ConsumerWidget {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.psychology_outlined),
+            title: const Text('Export my self-model'),
+            subtitle: const Text('The learned model of you — style, words, rhythm, decisions'),
+            onTap: () async {
+              try {
+                final m = await ref.read(clientProvider).selfModel();
+                if (!context.mounted) return;
+                await Clipboard.setData(ClipboardData(text: jsonEncode(m)));
+                if (!context.mounted) return;
+                showDialog<void>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Self-model ready'),
+                    content: Text(
+                        'v${m['version']} · ${m['counts']} learned. Saved to the clipboard — '
+                        'the portable model a future agent could load to be you.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context), child: const Text('OK')),
+                    ],
+                  ),
+                );
+              } on ProblemException catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                }
+              }
+            },
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.receipt_long_outlined),
             title: const Text('Audit trail'),
             subtitle: const Text('Everything the system did on your account'),

@@ -893,6 +893,50 @@ class _ClipboardCardState extends ConsumerState<_ClipboardCard> {
     return defaultTargetPlatform == TargetPlatform.macOS ? 'Mac' : 'Phone';
   }
 
+  Future<void> _showHistory() async {
+    List<Map<String, dynamic>> items = const [];
+    try {
+      items = await ref.read(clientProvider).clipboardHistory();
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        builder: (ctx, controller) => items.isEmpty
+            ? Center(
+                child: Text('Nothing copied yet.',
+                    style: Theme.of(ctx).textTheme.bodySmall))
+            : ListView.builder(
+                controller: controller,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: items.length,
+                itemBuilder: (ctx, i) {
+                  final text = items[i]['text'] as String? ?? '';
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.content_copy, size: 16),
+                    title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    subtitle: items[i]['device'] != null ? Text('${items[i]['device']}') : null,
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: text));
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(const SnackBar(content: Text('Copied')));
+                    },
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -924,6 +968,12 @@ class _ClipboardCardState extends ConsumerState<_ClipboardCard> {
               onPressed: _synced == null ? null : _pull,
               icon: const Icon(Icons.download, size: 18),
               label: const Text('Copy here'),
+            ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _showHistory,
+              icon: const Icon(Icons.history, size: 18),
+              label: const Text('History'),
             ),
           ]),
         ]),

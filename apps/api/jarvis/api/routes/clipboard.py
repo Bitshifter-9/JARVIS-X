@@ -31,13 +31,37 @@ async def get_clipboard(user: CurrentUser, session: SessionDep) -> dict[str, Any
     return profile.clipboard or {}
 
 
+MAX_HISTORY = 50
+
+
 @router.post("")
 async def set_clipboard(body: ClipIn, user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     profile = await get_profile(session, user.id)
+    now = datetime.now(UTC).isoformat()
+    prev = profile.clipboard or {}
+    history = list(prev.get("history") or [])
+    # Prepend the new clip, skip an immediate duplicate, cap the list (searchable history #7).
+    if body.text.strip() and (not history or history[0].get("text") != body.text):
+        history.insert(0, {"text": body.text, "device": body.device, "at": now})
+        history = history[:MAX_HISTORY]
     profile.clipboard = {
         "text": body.text,
         "device": body.device,
-        "updated_at": datetime.now(UTC).isoformat(),
+        "updated_at": now,
+        "history": history,
     }
     await session.flush()
-    return profile.clipboard
+    return {"text": body.text, "device": body.device, "updated_at": now}
+
+
+@router.get("/history")
+async def clipboard_history(
+    user: CurrentUser, session: SessionDep, q: str | None = None
+) -> list[dict[str, Any]]:
+    """Everything you've copied, newest first — searchable (second-brain #7)."""
+    profile = await get_profile(session, user.id)
+    history = list((profile.clipboard or {}).get("history") or [])
+    if q:
+        needle = q.lower()
+        history = [h for h in history if needle in str(h.get("text", "")).lower()]
+    return history
