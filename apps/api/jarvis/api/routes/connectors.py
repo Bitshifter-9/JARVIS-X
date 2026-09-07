@@ -253,6 +253,30 @@ async def sync_all(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     return {"synced": len(accounts) + (1 if slack.get("channels") else 0), "new": report}
 
 
+@router.post("/slack/scan")
+async def scan_slack_now(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Scan Slack now (FEATURES: a Scan-now for Slack, like Gmail). Deployment-level bot
+    token, so it scans every conversation the bot is in and ingests for linked users."""
+    from jarvis.core.config import get_settings
+    from jarvis.db.models.identity import Identity
+    from jarvis.workers.connector import scan_slack_all
+
+    s = get_settings()
+    linked = await session.scalar(
+        select(Identity.id).where(
+            Identity.user_id == user.id,
+            Identity.provider == "slack",
+            Identity.revoked_at.is_(None),
+        )
+    )
+    if not s.slack_bot_token:
+        return {"ok": False, "reason": "no_bot_token", "channels": 0, "new": 0}
+    if linked is None:
+        return {"ok": False, "reason": "not_linked", "channels": 0, "new": 0}
+    result = await scan_slack_all(session)
+    return {"ok": True, **result}
+
+
 @router.post("/{account_id}/sync")
 async def sync_one(account_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     from jarvis.workers.connector import sync_account

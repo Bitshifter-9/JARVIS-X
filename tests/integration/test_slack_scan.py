@@ -67,3 +67,22 @@ async def test_the_four_hour_default(session):
     from jarvis.core.config import get_settings
 
     assert get_settings().gmail_poll_seconds == 14400  # 4 hours
+
+
+async def test_the_scan_now_endpoint_needs_a_link_and_a_token(client, session, monkeypatch):
+    from jarvis.core.config import get_settings
+
+    await IdentityService(session).register("scannow@example.com", PASSWORD)
+    await session.commit()
+    r = await client.post(
+        "/v1/auth/login", json={"email": "scannow@example.com", "password": PASSWORD}
+    )
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    monkeypatch.setattr(get_settings(), "slack_bot_token", "")
+    body = (await client.post("/v1/connectors/slack/scan", headers=auth)).json()
+    assert body == {"ok": False, "reason": "no_bot_token", "channels": 0, "new": 0}
+
+    monkeypatch.setattr(get_settings(), "slack_bot_token", "xoxb-test")
+    body = (await client.post("/v1/connectors/slack/scan", headers=auth)).json()
+    assert body["reason"] == "not_linked"  # link your Slack member id first

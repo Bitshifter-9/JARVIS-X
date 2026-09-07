@@ -644,6 +644,9 @@ class JarvisClient {
   Future<Map<String, dynamic>> syncAllConnectors() async =>
       await _send('POST', '/v1/connectors/sync') as Map<String, dynamic>;
 
+  Future<Map<String, dynamic>> scanSlack() async =>
+      await _send('POST', '/v1/connectors/slack/scan') as Map<String, dynamic>;
+
   Future<Map<String, dynamic>> syncConnector(String id) async =>
       await _send('POST', '/v1/connectors/$id/sync') as Map<String, dynamic>;
 

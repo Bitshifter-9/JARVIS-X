@@ -350,6 +350,24 @@ class _LinkSlackState extends ConsumerState<_LinkSlack> {
     super.dispose();
   }
 
+  Future<void> _scan() async {
+    setState(() => _busy = true);
+    try {
+      final r = await ref.read(clientProvider).scanSlack();
+      if (!mounted) return;
+      final msg = r['ok'] == true
+          ? 'Scanned ${r['channels']} conversation(s) · ${r['new']} new deadline(s)'
+          : r['reason'] == 'not_linked'
+              ? 'Link your Slack member id first'
+              : 'Set your Slack bot token in Settings';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _link() async {
     final id = _id.text.trim();
     if (id.isEmpty) return;
@@ -391,10 +409,23 @@ class _LinkSlackState extends ConsumerState<_LinkSlack> {
               ),
           ]),
           const SizedBox(height: 8),
-          if (_linked != null)
+          if (_linked != null) ...[
             Text('Member $_linked is linked. Post "the report is due Friday 5pm" in a '
-                'channel the bot is in — it becomes a deadline in Goals.',
-                style: Theme.of(context).textTheme.bodySmall)
+                'channel or group the bot is in — it becomes a deadline in Goals.',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: _busy ? null : _scan,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.sync, size: 18),
+                label: const Text('Scan Slack now'),
+              ),
+            ),
+          ]
           else ...[
             Text('Slack profile → ⋯ → Copy member ID (starts with U0…), paste it here. '
                 'The bot must be in the channel (channel → Integrations → Add apps).',
