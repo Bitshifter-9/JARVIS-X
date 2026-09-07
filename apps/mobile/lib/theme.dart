@@ -3,49 +3,60 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// The design system, in one file.
 ///
-/// Dark-first: the icon's ink and cyan. Light is a real theme too, not an afterthought —
-/// the same accent, the same shapes, paper instead of ink. Everything else in the app
+/// Warm and calm like Claude — bone paper and clay in the light, warm charcoal in the
+/// dark — with one cinematic exception: the voice orb glows electric (`voice`), so the
+/// app stays quiet while the moment you actually talk to Jarvis feels alive. Everything
 /// reads colours from `Theme.of(context)`, never from a literal, so the two stay in step.
 class JarvisColors {
-  static const ink = Color(0xFF0B1220);
-  static const ink2 = Color(0xFF111A2E);
-  static const ink3 = Color(0xFF18233B);
-  static const cyan = Color(0xFF38BDF8);
-  static const sky = Color(0xFF7DD3FC);
-  static const mist = Color(0xFFE0F2FE);
-  static const paper = Color(0xFFF6F8FC);
+  // Warm neutrals (dark).
+  static const ink = Color(0xFF1E1D1B); // warm charcoal background
+  static const ink2 = Color(0xFF272522); // raised surface
+  static const ink3 = Color(0xFF322F2B); // higher surface
+  // Warm neutrals (light) — Claude's "bone".
+  static const paper = Color(0xFFFAF9F5);
   static const paper2 = Color(0xFFFFFFFF);
-  static const paper3 = Color(0xFFEAF0F8);
-  static const success = Color(0xFF34D399);
-  static const warning = Color(0xFFFBBF24);
-  static const danger = Color(0xFFF87171);
+  static const paper3 = Color(0xFFF0EEE7);
+  // Clay accent.
+  static const clay = Color(0xFFC96442); // accent on light
+  static const clayLight = Color(0xFFE08363); // accent on dark
+  // Cinematic voice accent (the orb).
+  static const voice = Color(0xFF22D3EE);
+  // Retained aliases so existing widgets keep compiling.
+  static const cyan = voice;
+  static const sky = clayLight;
+  static const mist = Color(0xFFF3E9E3);
+  static const success = Color(0xFF4FB477);
+  static const warning = Color(0xFFE0A32E);
+  static const danger = Color(0xFFDE6C5A);
 }
 
 ThemeData buildTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme = ColorScheme.fromSeed(
-    seedColor: JarvisColors.cyan,
+    seedColor: JarvisColors.clay,
     brightness: brightness,
-    primary: dark ? JarvisColors.sky : const Color(0xFF0369A1),
-    onPrimary: dark ? JarvisColors.ink : Colors.white,
-    secondary: dark ? JarvisColors.mist : const Color(0xFF0E7490),
+    primary: dark ? JarvisColors.clayLight : JarvisColors.clay,
+    onPrimary: dark ? const Color(0xFF241A16) : Colors.white,
+    secondary: dark ? JarvisColors.clayLight : const Color(0xFFA24E32),
     surface: dark ? JarvisColors.ink : JarvisColors.paper,
-    onSurface: dark ? const Color(0xFFE6EDF3) : const Color(0xFF0F172A),
+    onSurface: dark ? const Color(0xFFECE9E2) : const Color(0xFF2A2723),
     error: JarvisColors.danger,
   );
 
   final base = ThemeData(brightness: brightness, colorScheme: scheme, useMaterial3: true);
+  // Serif for the big type (Claude's literary feel), clean sans for everything else.
+  final serif = GoogleFonts.fraunces;
   final text = GoogleFonts.interTextTheme(base.textTheme).copyWith(
-    displaySmall: GoogleFonts.inter(fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: -1),
-    headlineSmall: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.6),
-    titleLarge: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.3),
+    displaySmall: serif(fontSize: 34, fontWeight: FontWeight.w600, letterSpacing: -0.5),
+    headlineSmall: serif(fontSize: 25, fontWeight: FontWeight.w600, letterSpacing: -0.3),
+    titleLarge: serif(fontSize: 21, fontWeight: FontWeight.w600, letterSpacing: -0.2),
     titleMedium: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
     labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
   );
 
   final surface2 = dark ? JarvisColors.ink2 : JarvisColors.paper2;
   final surface3 = dark ? JarvisColors.ink3 : JarvisColors.paper3;
-  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(18));
+  final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(20));
 
   return base.copyWith(
     textTheme: text,
@@ -143,7 +154,7 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
-        color: dark ? JarvisColors.ink3 : const Color(0xFF0F172A),
+        color: dark ? JarvisColors.ink3 : const Color(0xFF2A2723),
         borderRadius: BorderRadius.circular(10),
       ),
       textStyle: text.labelSmall?.copyWith(color: Colors.white),
@@ -172,7 +183,7 @@ ThemeData buildTheme(Brightness brightness) {
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      backgroundColor: dark ? JarvisColors.ink3 : const Color(0xFF0F172A),
+      backgroundColor: dark ? JarvisColors.ink3 : const Color(0xFF2A2723),
       contentTextStyle: text.bodyMedium?.copyWith(color: Colors.white),
     ),
     sliderTheme: SliderThemeData(activeTrackColor: scheme.primary, thumbColor: scheme.primary),

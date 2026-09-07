@@ -9,6 +9,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import '../api/models.dart';
 import '../state/providers.dart';
+import '../theme.dart';
 import '../voice/speaker.dart';
 import '../widgets/orb.dart';
 
@@ -201,7 +202,24 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
           ),
           GestureDetector(
             onTap: _phase == _Phase.speaking ? _interrupt : null,
-            child: JarvisOrb(state: orb, size: 200, amplitude: _amp),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: JarvisColors.voice.withValues(alpha: 0.25 + 0.35 * _amp),
+                    blurRadius: 60 + 40 * _amp,
+                    spreadRadius: 4 + 12 * _amp,
+                  ),
+                ],
+              ),
+              child: JarvisOrb(
+                state: orb,
+                size: 200,
+                amplitude: _amp,
+                color: JarvisColors.voice,
+              ),
+            ),
           ),
           const SizedBox(height: 18),
           Padding(
