@@ -36,9 +36,14 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
     try {
       final r = await ref.read(clientProvider).syncAllConnectors();
       if (!mounted) return;
-      final found = (r['new'] as Map<String, dynamic>? ?? {}).entries
-          .map((e) => '${e.key}: ${(e.value as Map).values.fold<int>(0, (a, b) => a + (b as int))} new')
-          .join(', ');
+      final found = (r['new'] as Map<String, dynamic>? ?? {}).entries.map((e) {
+        final v = e.value as Map;
+        // Slack reports {channels, new}; an account reports {provider: count}.
+        final n = v.containsKey('new')
+            ? v['new'] as int
+            : v.values.fold<int>(0, (a, b) => a + (b as int));
+        return '${e.key}: $n new';
+      }).join(', ');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(r['synced'] == 0
               ? 'Nothing connected yet — connect Google below'

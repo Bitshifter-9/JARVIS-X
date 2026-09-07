@@ -192,7 +192,22 @@ async def tick(session: AsyncSession) -> dict[str, Any]:
         report["canvas"] = await sync_canvas(session)
     except Exception as exc:  # noqa: BLE001
         log.error("connector_sync_failed", provider="canvas", error=str(exc)[:300])
+    try:
+        report["slack"] = await scan_slack_all(session)
+    except Exception as exc:  # noqa: BLE001
+        log.error("connector_sync_failed", provider="slack", error=str(exc)[:300])
     return report
+
+
+async def scan_slack_all(session: AsyncSession) -> dict[str, int]:
+    """The Slack reconciliation scan, if configured (deployment-level bot token)."""
+    s = get_settings()
+    if not (s.slack_scan_enabled and s.slack_bot_token):
+        return {"channels": 0, "new": 0}
+    from jarvis.connectors.slack.client import SlackClient
+    from jarvis.connectors.slack.service import scan_slack
+
+    return await scan_slack(session, SlackClient(s.slack_bot_token))
 
 
 async def run_forever(*, poll_seconds: float | None = None) -> None:

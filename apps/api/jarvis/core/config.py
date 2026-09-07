@@ -105,7 +105,10 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     # How often every connected Gmail (and Classroom) is asked "what changed?". 60 s is
     # the demo path's 10-second event-to-alert budget; 14400 (4 h) is the quiet setting.
-    gmail_poll_seconds: int = Field(default=60, description="Seconds between Gmail polls")
+    gmail_poll_seconds: int = Field(
+        default=14400, description="Seconds between connector scans (Gmail, Slack). 4h."
+    )
+    slack_scan_enabled: bool = True
 
     # ── YouTube pipeline ───────────────────────────────────────────────
     # Homebrew's core ffmpeg dropped libass (no burned captions); point this at a

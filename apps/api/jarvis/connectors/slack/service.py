@@ -128,6 +128,72 @@ class SlackService:
         return "duplicate" if result.duplicate else "ingested"
 
 
+async def scan_slack(session, transport, *, per_channel: int = 30) -> dict[str, int]:  # noqa: ANN001
+    """Pull recent messages from every conversation the bot is in — public and private
+    channels, DMs, and **group DMs (mpim)** — and ingest deadlines for whoever is linked.
+
+    Slack pushes new messages in real time; this scan (every 4h and on "Scan now") is the
+    reconciliation pass that catches anything the webhook missed and back-fills history
+    after the bot joins. Ingestion is idempotent on the message ``ts``, so re-scanning a
+    window is a no-op.
+    """
+    from jarvis.services.event import EventService
+    from jarvis.services.event.envelope import EventEnvelope, EventSource, EventType, Trust
+
+    # Every linked Slack user → its JARVIS account, resolved once.
+    links = {
+        i.subject: i.user_id
+        for i in (
+            await session.scalars(
+                select(Identity).where(Identity.provider == PROVIDER, Identity.revoked_at.is_(None))
+            )
+        ).all()
+    }
+    if not links:
+        return {"channels": 0, "new": 0}
+
+    listing = await transport.call(
+        "conversations.list",
+        {"types": "public_channel,private_channel,mpim,im", "limit": 200, "exclude_archived": True},
+    )
+    channels = [c for c in (listing.get("channels") or []) if c.get("is_member", True)]
+    events = EventService(session)
+    new = 0
+    for channel in channels:
+        cid = channel.get("id")
+        if not cid:
+            continue
+        history = await transport.call(
+            "conversations.history", {"channel": cid, "limit": per_channel}
+        )
+        for raw in reversed(history.get("messages") or []):
+            item = normalize_message({**raw, "channel": cid, "type": raw.get("type", "message")})
+            if item is None:
+                continue
+            user_id = links.get(str(raw.get("user", "")))
+            if user_id is None:
+                continue
+            result = await events.ingest(
+                EventEnvelope(
+                    event_type=EventType.SOURCE_MESSAGE_CHANGED,
+                    occurred_at=item.occurred_at or datetime.now(UTC),
+                    tenant_id=user_id,
+                    source=EventSource(provider=PROVIDER, object_id=item.object_id),
+                    correlation_id=ensure_correlation_id(),
+                    trust=Trust.UNTRUSTED,
+                    payload={
+                        "text": item.body,
+                        "channel": cid,
+                        "author": item.author,
+                        "thread_ts": item.raw.get("thread_ts"),
+                    },
+                )
+            )
+            if not result.duplicate:
+                new += 1
+    return {"channels": len(channels), "new": new}
+
+
 class SlackConnector:
     """The outbound half, behind the standard connector contract."""
 

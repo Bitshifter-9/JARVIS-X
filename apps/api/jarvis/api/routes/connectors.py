@@ -244,7 +244,13 @@ async def sync_all(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     report = {}
     for account in accounts:
         report[account.external_id] = await sync_account(session, account)
-    return {"synced": len(accounts), "new": report}
+    # Slack is deployment-level (one bot token), scanned for every linked user.
+    from jarvis.workers.connector import scan_slack_all
+
+    slack = await scan_slack_all(session)
+    if slack.get("channels"):
+        report["slack"] = slack
+    return {"synced": len(accounts) + (1 if slack.get("channels") else 0), "new": report}
 
 
 @router.post("/{account_id}/sync")

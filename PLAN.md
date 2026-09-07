@@ -674,6 +674,8 @@ info, find-my-devices map; digests, weekly review, GraphRAG answers.
 | 14.4 | **Slash-commands** — `/brief /due /focus /screenshot /ring /locate /week` in chat expand to a natural request the agent runs; the input hints them | ✅ |
 | 14.5 | **Mac command palette** — ⌘K opens a searchable list: jump to any tab, ask a question, screenshot the Mac, ring the phone, scan mail | ✅ |
 
+| 14.6 | **Slack scan, and a 4-hour default.** Slack messages were only ever live pushes; now `scan_slack` pulls recent history from every conversation the bot is in — public and private channels, DMs, and **group DMs (mpim)** — and ingests deadlines for whoever is linked, idempotent on the message `ts`. It runs in the connector tick and on **Scan now** (Connections). The connector poll default is now **14400 s (4 hours)** for Gmail and Slack alike (`gmail_poll_seconds`) | ✅ Tests: a group-DM deadline for a linked user is ingested once, an unlinked author is skipped, a re-scan adds nothing, nothing runs without a link, and the default is 4 h |
+
 ## 13. Risks
 
 | Risk | Impact | Mitigation |
