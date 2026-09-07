@@ -355,12 +355,22 @@ class _LinkSlackState extends ConsumerState<_LinkSlack> {
     try {
       final r = await ref.read(clientProvider).scanSlack();
       if (!mounted) return;
-      final msg = r['ok'] == true
-          ? 'Scanned ${r['channels']} conversation(s) · ${r['new']} new deadline(s)'
-          : r['reason'] == 'not_linked'
-              ? 'Link your Slack member id first'
-              : 'Set your Slack bot token in Settings';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      final missing = (r['missing_scopes'] as List?)?.cast<String>() ?? const [];
+      final String msg;
+      if (r['ok'] == true) {
+        msg = 'Scanned ${r['channels']} conversation(s) · ${r['new']} new deadline(s)';
+      } else if (missing.isNotEmpty) {
+        msg = 'Add ${missing.join(', ')} to the Slack app scopes, '
+            'then reinstall it. Scanned ${r['channels']} so far.';
+      } else if (r['reason'] == 'not_linked') {
+        msg = 'Link your Slack member id first';
+      } else {
+        msg = 'Set your Slack bot token in Settings';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        duration: Duration(seconds: missing.isNotEmpty ? 8 : 4),
+      ));
     } on ProblemException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {

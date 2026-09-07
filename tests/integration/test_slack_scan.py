@@ -42,7 +42,7 @@ async def test_scan_ingests_deadlines_from_a_group_dm_for_linked_users(session, 
     )
     result = await scan_slack(session, transport)
     await session.commit()
-    assert result == {"channels": 1, "new": 1}
+    assert result == {"channels": 1, "new": 1, "missing_scopes": []}
 
     events = (await session.scalars(select(Event).where(Event.provider == "slack"))).all()
     assert len(events) == 1 and events[0].user_id == user.id
@@ -51,6 +51,23 @@ async def test_scan_ingests_deadlines_from_a_group_dm_for_linked_users(session, 
     # A second scan of the same window ingests nothing (idempotent on ts).
     again = await scan_slack(session, transport)
     assert again["new"] == 0
+
+
+async def test_a_missing_scope_skips_that_type_and_is_reported(session, user):
+    """No groups:read → private channels can't be listed, but public ones still scan,
+    and the scan reports which scope to add rather than silently returning zero."""
+    await SlackService(session, RecordingSlackTransport()).link_user(user.id, SLACK_USER)
+    await session.commit()
+
+    transport = RecordingSlackTransport(
+        channels={"public_channel": [{"id": "C_PUB", "is_member": True}]},
+        history={"C_PUB": [_msg("1700000009.9", "the invoice is due Monday")]},
+        missing={"private_channel": "groups:read", "mpim": "mpim:read"},
+    )
+    result = await scan_slack(session, transport)
+    await session.commit()
+    assert result["channels"] == 1 and result["new"] == 1
+    assert result["missing_scopes"] == ["groups:read", "mpim:read"]
 
 
 async def test_scan_does_nothing_without_a_linked_user(session, user):

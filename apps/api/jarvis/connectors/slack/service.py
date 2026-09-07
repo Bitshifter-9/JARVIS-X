@@ -152,11 +152,26 @@ async def scan_slack(session, transport, *, per_channel: int = 30) -> dict[str, 
     if not links:
         return {"channels": 0, "new": 0}
 
-    listing = await transport.call(
-        "conversations.list",
-        {"types": "public_channel,private_channel,mpim,im", "limit": 200, "exclude_archived": True},
-    )
-    channels = [c for c in (listing.get("channels") or []) if c.get("is_member", True)]
+    # List each conversation type on its own, so a missing scope on one (e.g. no
+    # groups:read) does not zero out the whole scan — it just skips that type and
+    # reports which scope to add.
+    channels: list[dict] = []
+    missing_scopes: list[str] = []
+    for kind, scope in (
+        ("public_channel", "channels:read"),
+        ("private_channel", "groups:read"),
+        ("mpim", "mpim:read"),
+        ("im", "im:read"),
+    ):
+        listing = await transport.call(
+            "conversations.list",
+            {"types": kind, "limit": 200, "exclude_archived": True},
+        )
+        if not listing.get("ok"):
+            if listing.get("error") == "missing_scope":
+                missing_scopes.append(listing.get("needed") or scope)
+            continue
+        channels += [c for c in (listing.get("channels") or []) if c.get("is_member", True)]
     events = EventService(session)
     new = 0
     for channel in channels:
@@ -191,7 +206,11 @@ async def scan_slack(session, transport, *, per_channel: int = 30) -> dict[str, 
             )
             if not result.duplicate:
                 new += 1
-    return {"channels": len(channels), "new": new}
+    return {
+        "channels": len(channels),
+        "new": new,
+        "missing_scopes": sorted(set(missing_scopes)),
+    }
 
 
 class SlackConnector:

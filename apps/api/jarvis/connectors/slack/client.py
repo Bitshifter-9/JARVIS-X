@@ -85,19 +85,27 @@ class SlackClient:
 class RecordingSlackTransport:
     """Captures calls instead of making them. Used by the tests."""
 
-    def __init__(self, *, ok: bool = True, channels=None, history=None) -> None:  # noqa: ANN001
+    def __init__(self, *, ok: bool = True, channels=None, history=None, missing=None) -> None:  # noqa: ANN001
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.ok = ok
-        # For scan tests: {channel_id: [message dicts]} and a channel listing.
+        # For scan tests: {type: [channels]} or a flat list, {channel_id: [messages]},
+        # and {type: needed_scope} for missing-scope simulation.
         self._channels = channels or []
         self._history = history or {}
+        self._missing = missing or {}
 
     async def call(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((method, payload))
         if not self.ok:
             return {"ok": False, "error": "channel_not_found"}
         if method == "conversations.list":
-            return {"ok": True, "channels": self._channels}
+            kind = payload.get("types")
+            if kind in self._missing:
+                return {"ok": False, "error": "missing_scope", "needed": self._missing[kind]}
+            chans = self._channels.get(kind, []) if isinstance(self._channels, dict) else (
+                self._channels if kind == "public_channel" else []
+            )
+            return {"ok": True, "channels": chans}
         if method == "conversations.history":
             return {"ok": True, "messages": self._history.get(payload.get("channel"), [])}
         return {

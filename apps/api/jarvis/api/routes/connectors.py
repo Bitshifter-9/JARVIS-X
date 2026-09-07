@@ -274,7 +274,7 @@ async def scan_slack_now(user: CurrentUser, session: SessionDep) -> dict[str, An
     if linked is None:
         return {"ok": False, "reason": "not_linked", "channels": 0, "new": 0}
     result = await scan_slack_all(session)
-    return {"ok": True, **result}
+    return {"ok": not result.get("missing_scopes"), **result}
 
 
 @router.post("/{account_id}/sync")
