@@ -7,15 +7,19 @@ one ``MailInsight`` per source object, so a re-scan skips what it has already re
 """
 
 from jarvis.services.insights.service import (
+    anomaly_nudges,
     away_digest,
     derive_insights,
+    grouped_activity,
     label_for,
     spending_from,
     travel_from,
 )
 
 __all__ = [
+    "anomaly_nudges",
     "away_digest",
+    "grouped_activity",
     "derive_insights",
     "label_for",
     "spending_from",

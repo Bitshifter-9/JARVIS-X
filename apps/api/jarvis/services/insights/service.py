@@ -223,6 +223,84 @@ async def derive_insights(session: AsyncSession, user_id: uuid.UUID, *, limit: i
     return written
 
 
+async def grouped_activity(
+    session: AsyncSession, user_id: uuid.UUID, *, hours: int = 48, limit: int = 8
+) -> list[dict[str, Any]]:
+    """Recent messages clustered by sender/channel with a count and the latest subject
+    (FEATURES-50 #31) — the summary you'd want instead of N separate pings."""
+    since = datetime.now(UTC) - timedelta(hours=hours)
+    rows = (
+        await session.scalars(
+            select(SourceObject)
+            .where(
+                SourceObject.user_id == user_id,
+                SourceObject.provider.in_(("gmail", "slack")),
+                SourceObject.occurred_at >= since,
+            )
+            .order_by(SourceObject.occurred_at.desc())
+        )
+    ).all()
+    clusters: dict[str, dict[str, Any]] = {}
+    for obj in rows:
+        key = f"{obj.provider}:{(obj.author or 'unknown').lower()}"
+        c = clusters.setdefault(
+            key,
+            {"provider": obj.provider, "who": obj.author or "unknown",
+             "count": 0, "latest": obj.title, "when": obj.occurred_at},
+        )
+        c["count"] += 1
+    ordered = sorted(clusters.values(), key=lambda c: -c["count"])[:limit]
+    return [
+        {"provider": c["provider"], "who": c["who"], "count": c["count"],
+         "latest": c["latest"], "when": c["when"].isoformat() if c["when"] else None}
+        for c in ordered
+    ]
+
+
+async def anomaly_nudges(
+    session: AsyncSession, user_id: uuid.UUID, *, baseline_days: int = 7
+) -> list[dict[str, Any]]:
+    """Unusual activity worth a nudge (FEATURES-50 #39): a label whose count in the last
+    24 h is well above its recent daily average — "6 Finance emails today (usually ~1)"."""
+    now = datetime.now(UTC)
+    day_ago = now - timedelta(hours=24)
+    base_start = now - timedelta(days=baseline_days + 1)
+    rows = (
+        await session.scalars(
+            select(MailInsight).where(
+                MailInsight.user_id == user_id,
+                MailInsight.occurred_at >= base_start,
+                MailInsight.occurred_at < day_ago,
+            )
+        )
+    ).all()
+    baseline: dict[str, int] = defaultdict(int)
+    for r in rows:
+        baseline[r.label] += 1
+
+    today = (
+        await session.scalars(
+            select(MailInsight).where(
+                MailInsight.user_id == user_id, MailInsight.occurred_at >= day_ago
+            )
+        )
+    ).all()
+    today_counts: dict[str, int] = defaultdict(int)
+    for r in today:
+        today_counts[r.label] += 1
+
+    nudges = []
+    for label, count in today_counts.items():
+        avg = baseline[label] / baseline_days
+        if count >= 3 and count >= 2 * max(avg, 0.5):
+            nudges.append(
+                {"label": label, "today": count, "usual_per_day": round(avg, 1),
+                 "message": f"{count} {label} emails today — you usually get "
+                            f"about {round(avg, 1)} a day."}
+            )
+    return sorted(nudges, key=lambda n: -n["today"])
+
+
 async def away_digest(
     session: AsyncSession, user_id: uuid.UUID, *, since: datetime | None = None
 ) -> dict[str, Any]:

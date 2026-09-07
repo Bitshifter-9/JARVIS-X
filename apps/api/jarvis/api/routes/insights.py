@@ -11,7 +11,12 @@ from sqlalchemy import select
 
 from jarvis.api.deps import CurrentUser, SessionDep
 from jarvis.db.models.source import MailInsight
-from jarvis.services.insights import away_digest, derive_insights
+from jarvis.services.insights import (
+    anomaly_nudges,
+    away_digest,
+    derive_insights,
+    grouped_activity,
+)
 
 router = APIRouter(prefix="/v1/insights", tags=["insights"])
 
@@ -86,6 +91,16 @@ async def travel(user: CurrentUser, session: SessionDep) -> list[dict[str, Any]]
         )
     ).all()
     return [{**(r.travel or {}), "merchant": r.merchant} for r in rows]
+
+
+@router.get("/grouped")
+async def grouped(user: CurrentUser, session: SessionDep) -> list[dict[str, Any]]:
+    return await grouped_activity(session, user.id)
+
+
+@router.get("/anomalies")
+async def anomalies(user: CurrentUser, session: SessionDep) -> list[dict[str, Any]]:
+    return await anomaly_nudges(session, user.id)
 
 
 @router.get("/away")

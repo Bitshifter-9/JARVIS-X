@@ -20,6 +20,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Map<String, dynamic>? _streaks;
   Map<String, dynamic>? _meeting;
   List<Map<String, dynamic>> _travel = const [];
+  List<Map<String, dynamic>> _grouped = const [];
+  List<Map<String, dynamic>> _anomalies = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -45,6 +47,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.awayDigest(),
         client.streaks(),
         client.meetingPrep(),
+        client.groupedActivity(),
+        client.anomalies(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -54,6 +58,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _away = results[3] as Map<String, dynamic>;
         _streaks = results[4] as Map<String, dynamic>?;
         _meeting = results[5] as Map<String, dynamic>?;
+        _grouped = results[6] as List<Map<String, dynamic>>;
+        _anomalies = results[7] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -107,10 +113,14 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
+                      if (_anomalies.isNotEmpty) _AnomalyCard(nudges: _anomalies),
+                      if (_anomalies.isNotEmpty) const SizedBox(height: 8),
                       if (_meeting != null) _MeetingCard(meeting: _meeting!),
                       if (_meeting != null) const SizedBox(height: 8),
                       _StreaksCard(streaks: _streaks),
                       const SizedBox(height: 8),
+                      if (_grouped.isNotEmpty) _GroupedCard(groups: _grouped),
+                      if (_grouped.isNotEmpty) const SizedBox(height: 8),
                       _AwayCard(away: _away),
                       const SizedBox(height: 8),
                       _SpendingCard(spending: _spending),
@@ -350,5 +360,64 @@ class _StreaksCard extends StatelessWidget {
           style: Theme.of(context).textTheme.titleLarge),
       Text('$label · best $longest', style: Theme.of(context).textTheme.bodySmall),
     ]);
+  }
+}
+
+class _AnomalyCard extends StatelessWidget {
+  const _AnomalyCard({required this.nudges});
+  final List<Map<String, dynamic>> nudges;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.notification_important_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Worth a look', style: Theme.of(context).textTheme.labelLarge),
+          ]),
+          const SizedBox(height: 6),
+          for (final n in nudges)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(n['message'] as String? ?? '',
+                  style: Theme.of(context).textTheme.bodyMedium),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _GroupedCard extends StatelessWidget {
+  const _GroupedCard({required this.groups});
+  final List<Map<String, dynamic>> groups;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Grouped · last 48h', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          for (final g in groups)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                  g['provider'] == 'slack' ? Icons.tag : Icons.mail_outline,
+                  size: 20),
+              title: Text('${g['who']} · ${g['count']}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(g['latest'] as String? ?? '',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+        ]),
+      ),
+    );
   }
 }

@@ -555,6 +555,12 @@ class JarvisClient {
   Future<Map<String, dynamic>> awayDigest({int hours = 24}) async =>
       await _send('GET', '/v1/insights/away?hours=$hours') as Map<String, dynamic>;
 
+  Future<List<Map<String, dynamic>>> groupedActivity() async =>
+      (await _send('GET', '/v1/insights/grouped') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  Future<List<Map<String, dynamic>>> anomalies() async =>
+      (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
+
   // ── proactivity: streaks and meeting prep ─────────────────────────
   Future<Map<String, dynamic>> streaks() async =>
       await _send('GET', '/v1/proactivity/streaks') as Map<String, dynamic>;

@@ -118,3 +118,37 @@ async def test_the_endpoints(client, session):
     spend = (await client.get("/v1/insights/spending", headers=auth)).json()
     assert spend["totals"].get("INR") == 499.0
     assert (await client.get("/v1/insights/labels", headers=auth)).json().get("Finance") == 1
+
+
+async def test_grouped_activity_clusters_by_sender(session, user):
+    now = datetime.now(UTC)
+    for i in range(3):
+        session.add(_email(user.id, f"a{i}", "hi", "boss@work.com", "x", now))
+    session.add(_email(user.id, "b0", "promo", "deals@shop.com", "y", now))
+    await session.flush()
+    from jarvis.services.insights import grouped_activity
+
+    clusters = await grouped_activity(session, user.id)
+    top = clusters[0]
+    assert top["who"] == "boss@work.com" and top["count"] == 3
+
+
+async def test_anomaly_nudges_flag_a_spike(session, user):
+    from datetime import timedelta
+
+    from jarvis.services.insights import anomaly_nudges, derive_insights
+
+    now = datetime.now(UTC)
+    # baseline: one Finance mail on each of several earlier days
+    for d in range(2, 8):
+        session.add(_email(user.id, f"old{d}", "Invoice", "billing@razorpay.com",
+                           "amount due ₹10", now - timedelta(days=d)))
+    # today: a spike of Finance mail
+    for i in range(5):
+        session.add(_email(user.id, f"new{i}", "Invoice", "billing@razorpay.com",
+                           "amount due ₹10", now))
+    await session.flush()
+    await derive_insights(session, user.id)
+
+    nudges = await anomaly_nudges(session, user.id)
+    assert any(n["label"] == "Finance" and n["today"] == 5 for n in nudges)
