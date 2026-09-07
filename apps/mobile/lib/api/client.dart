@@ -577,6 +577,16 @@ class JarvisClient {
       await _send('POST', '/v1/clipboard',
           body: {'text': text, if (device != null) 'device': device}) as Map<String, dynamic>;
 
+  /// Edit what a device is allowed to do (FEATURES-50 #30).
+  Future<DeviceInfo> editAllowlist(String deviceId,
+      {List<String>? capabilities, List<String>? bundleIds}) async {
+    final data = await _send('PATCH', '/v1/devices/$deviceId/allowlist', body: {
+      if (capabilities != null) 'capabilities': capabilities,
+      if (bundleIds != null) 'allowed_bundle_ids': bundleIds,
+    }) as Map<String, dynamic>;
+    return DeviceInfo.fromJson(data);
+  }
+
   // ── proactivity: streaks and meeting prep ─────────────────────────
   Future<Map<String, dynamic>> streaks() async =>
       await _send('GET', '/v1/proactivity/streaks') as Map<String, dynamic>;

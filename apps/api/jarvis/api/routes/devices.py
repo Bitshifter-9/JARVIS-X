@@ -52,6 +52,7 @@ class DeviceOut(BaseModel):
     online: bool
     last_seen_at: str | None
     allowed_bundle_ids: list[str]
+    capabilities: list[str] = Field(default_factory=list)
 
 
 @router.post("/pair")
@@ -250,7 +251,29 @@ async def _device_out(devices: DeviceService, device) -> DeviceOut:  # noqa: ANN
         online=await devices.is_online(device.id),
         last_seen_at=device.last_seen_at.isoformat() if device.last_seen_at else None,
         allowed_bundle_ids=device.allowed_bundle_ids,
+        capabilities=device.capabilities,
     )
+
+
+class AllowlistPatch(BaseModel):
+    allowed_bundle_ids: list[str] | None = Field(default=None, max_length=200)
+    capabilities: list[str] | None = Field(default=None, max_length=100)
+
+
+@router.patch("/{device_id}/allowlist", response_model=DeviceOut)
+async def edit_allowlist(
+    device_id: uuid.UUID, body: AllowlistPatch, user: CurrentUser, session: SessionDep
+) -> DeviceOut:
+    """Edit what a device is allowed to do (FEATURES-50 #30). The server gate uses these,
+    so tightening them here stops jobs from being dispatched to the device at all."""
+    devices = DeviceService(session)
+    device = await devices.get(user.id, device_id)
+    if body.allowed_bundle_ids is not None:
+        device.allowed_bundle_ids = [b[:200] for b in body.allowed_bundle_ids]
+    if body.capabilities is not None:
+        device.capabilities = [c[:64] for c in body.capabilities]
+    await session.flush()
+    return await _device_out(devices, device)
 
 
 @router.get("/server-key")

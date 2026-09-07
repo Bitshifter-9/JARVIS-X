@@ -302,6 +302,10 @@ class DeviceService:
             )
         return dispatchable, needs_review
 
+    async def get(self, user_id: uuid.UUID, device_id: uuid.UUID) -> Device:
+        """A device the user owns, or NotFound."""
+        return await self._owned(user_id, device_id)
+
     async def _owned(self, user_id: uuid.UUID, device_id: uuid.UUID) -> Device:
         device = await self.session.scalar(
             select(Device).where(Device.id == device_id, Device.user_id == user_id)

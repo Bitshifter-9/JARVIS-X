@@ -224,6 +224,7 @@ class DeviceInfo {
     required this.revoked,
     required this.online,
     required this.allowedBundleIds,
+    this.capabilities = const [],
     this.lastSeenAt,
   });
 
@@ -236,6 +237,7 @@ class DeviceInfo {
   final bool online;
   final DateTime? lastSeenAt;
   final List<String> allowedBundleIds;
+  final List<String> capabilities;
 
   factory DeviceInfo.fromJson(Map<String, dynamic> json) => DeviceInfo(
         id: json['id'] as String,
@@ -250,6 +252,8 @@ class DeviceInfo {
             : DateTime.parse(json['last_seen_at'] as String).toLocal(),
         allowedBundleIds:
             (json['allowed_bundle_ids'] as List<dynamic>).cast<String>(),
+        capabilities:
+            ((json['capabilities'] as List<dynamic>?) ?? const []).cast<String>(),
       );
 }
 

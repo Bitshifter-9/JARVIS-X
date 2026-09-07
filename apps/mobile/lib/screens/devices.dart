@@ -403,6 +403,36 @@ class _PhoneCardState extends ConsumerState<_PhoneCard> {
     return {for (final e in controllers.entries) e.key: e.value.text.trim()};
   }
 
+  // A library of common deep links (FEATURES-50 #27); tapping one hands it to the OS.
+  static const _presets = <(String, IconData, String)>[
+    ('WhatsApp', Icons.chat, 'whatsapp://send'),
+    ('Google Maps', Icons.map, 'https://maps.google.com'),
+    ('Spotify', Icons.music_note, 'spotify:'),
+    ('YouTube', Icons.play_circle, 'https://www.youtube.com'),
+    ('Gmail', Icons.mail, 'https://mail.google.com'),
+    ('Calendar', Icons.event, 'https://calendar.google.com'),
+  ];
+
+  void _openPresets(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const ListTile(title: Text('Open on the phone')),
+          for (final (label, icon, url) in _presets)
+            ListTile(
+              leading: Icon(icon),
+              title: Text(label),
+              onTap: () {
+                Navigator.pop(context);
+                _run('phone.open_deeplink', {'url': url});
+              },
+            ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final d = widget.device;
@@ -436,6 +466,16 @@ class _PhoneCardState extends ConsumerState<_PhoneCard> {
                 PopupMenuItem(value: 'airplane', child: Text('Airplane mode')),
               ],
               child: const Chip(avatar: Icon(Icons.settings, size: 18), label: Text('Settings')),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.apps, size: 18),
+              label: const Text('Presets'),
+              onPressed: () => _openPresets(context),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.tune, size: 18),
+              label: const Text('Allowlist'),
+              onPressed: () => editDeviceAllowlist(context, ref, widget.device),
             ),
             ActionChip(
               avatar: const Icon(Icons.notifications_active, size: 18),
@@ -862,5 +902,82 @@ class _ClipboardCardState extends ConsumerState<_ClipboardCard> {
         ]),
       ),
     );
+  }
+}
+
+/// Edit what a device is allowed to do (FEATURES-50 #30). The server gate honours these,
+/// so unchecking a capability stops those jobs from being dispatched to the device.
+Future<void> editDeviceAllowlist(
+    BuildContext context, WidgetRef ref, DeviceInfo device) async {
+  // The universe of capabilities per platform, unioned with whatever the device reports.
+  const phoneCaps = [
+    'phone.open_url', 'phone.open_deeplink', 'phone.open_app', 'phone.open_settings',
+    'phone.clipboard_read', 'phone.clipboard_write', 'phone.notify', 'phone.call',
+    'phone.ring', 'phone.locate', 'phone.whatsapp_send', 'phone.torch', 'phone.system_info',
+  ];
+  const macCaps = [
+    'mac.capture_screen', 'mac.describe_screen', 'mac.open_app', 'mac.open_url',
+    'mac.clipboard_read', 'mac.clipboard_write', 'mac.ring', 'mac.lock_screen',
+    'mac.volume', 'mac.whatsapp_send', 'mac.type',
+  ];
+  final universe = <String>{
+    ...(device.platform == 'macos' ? macCaps : phoneCaps),
+    ...device.capabilities,
+  }.toList()
+    ..sort();
+  final selected = device.capabilities.toSet();
+
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheet) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          children: [
+            ListTile(
+              title: Text('${device.name} — allowlist',
+                  style: Theme.of(context).textTheme.titleMedium),
+              subtitle: const Text('Only checked capabilities can run on this device'),
+            ),
+            for (final cap in universe)
+              CheckboxListTile(
+                dense: true,
+                value: selected.contains(cap),
+                title: Text(cap),
+                onChanged: (v) => setSheet(() {
+                  if (v == true) {
+                    selected.add(cap);
+                  } else {
+                    selected.remove(cap);
+                  }
+                }),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Save'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (saved != true) return;
+  try {
+    await ref.read(clientProvider).editAllowlist(device.id, capabilities: selected.toList());
+    ref.invalidate(devicesProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Allowlist updated')));
+    }
+  } on ProblemException catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 }

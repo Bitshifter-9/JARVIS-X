@@ -116,3 +116,22 @@ async def test_the_dialer_is_r1_and_the_trust_switch_covers_the_hands_on_verbs(
 
     assert (await client.delete("/v1/permissions/trust-devices", headers=auth)).status_code == 204
     assert not (await client.get("/v1/permissions/trust-devices", headers=auth)).json()["trusted"]
+
+
+async def test_editing_a_device_allowlist(client, auth, session, user):
+    phone = await _pair(session, user.id, name="This phone", platform="android")
+
+    r = await client.patch(
+        f"/v1/devices/{phone.id}/allowlist",
+        json={"allowed_bundle_ids": ["com.whatsapp"], "capabilities": ["phone.ring"]},
+        headers=auth,
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["allowed_bundle_ids"] == ["com.whatsapp"]
+    assert body["capabilities"] == ["phone.ring"]
+
+    # It persists on the next list.
+    devices = (await client.get("/v1/devices", headers=auth)).json()
+    listed = next(d for d in devices if d["id"] == str(phone.id))
+    assert listed["capabilities"] == ["phone.ring"]
