@@ -766,6 +766,10 @@ class JarvisClient {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listArtifacts({int limit = 20}) async =>
+      (await _send('GET', '/v1/artifacts', query: {'limit': '$limit'}) as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+
   /// Artifact bytes, fetched with the bearer token — an `Image.network` cannot carry it.
   Future<Uint8List> artifactBytes(String url) async {
     final hit = _artifacts[url];

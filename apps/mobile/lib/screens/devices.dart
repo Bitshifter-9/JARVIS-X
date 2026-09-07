@@ -247,6 +247,11 @@ class _MacCardState extends ConsumerState<_MacCard> {
               onPressed: () => _run('mac.capture_screen'),
             ),
             ActionChip(
+              avatar: const Icon(Icons.cast, size: 18),
+              label: const Text('View screen'),
+              onPressed: () => mirrorDeviceScreen(context, ref, widget.device),
+            ),
+            ActionChip(
               avatar: const Icon(Icons.public, size: 18),
               label: const Text('Open Chrome'),
               onPressed: () =>
@@ -478,6 +483,11 @@ class _PhoneCardState extends ConsumerState<_PhoneCard> {
               avatar: const Icon(Icons.tune, size: 18),
               label: const Text('Allowlist'),
               onPressed: () => editDeviceAllowlist(context, ref, widget.device),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.screenshot_monitor, size: 18),
+              label: const Text('Screen'),
+              onPressed: () => mirrorDeviceScreen(context, ref, widget.device),
             ),
             ActionChip(
               avatar: const Icon(Icons.notifications_active, size: 18),
@@ -1026,5 +1036,121 @@ class _LastLocation extends StatelessWidget {
     if (d.inMinutes < 60) return '${d.inMinutes}m ago';
     if (d.inHours < 24) return '${d.inHours}h ago';
     return '${d.inDays}d ago';
+  }
+}
+
+/// One-frame screen mirror (FEATURES-50 #25): capture the device's screen and show the
+/// frame here. Reuses the existing capture verb + artifact store — no new device code.
+Future<void> mirrorDeviceScreen(
+    BuildContext context, WidgetRef ref, DeviceInfo device) async {
+  final client = ref.read(clientProvider);
+  final tool = device.platform == 'macos' ? 'mac.capture_screen' : 'phone.capture_screen';
+
+  // What images already exist, so we can spot the new frame.
+  Set<String> before;
+  try {
+    before = {
+      for (final a in await client.listArtifacts())
+        if ((a['content_type'] as String? ?? '').startsWith('image/')) a['id'] as String,
+    };
+  } on ProblemException {
+    before = {};
+  }
+
+  try {
+    await client.runAction(tool, args: const {}, deviceId: device.id);
+  } on ProblemException catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+    return;
+  }
+
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => _MirrorDialog(before: before, deviceName: device.name),
+  );
+}
+
+class _MirrorDialog extends ConsumerStatefulWidget {
+  const _MirrorDialog({required this.before, required this.deviceName});
+
+  final Set<String> before;
+  final String deviceName;
+
+  @override
+  ConsumerState<_MirrorDialog> createState() => _MirrorDialogState();
+}
+
+class _MirrorDialogState extends ConsumerState<_MirrorDialog> {
+  String? _url;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _poll();
+  }
+
+  Future<void> _poll() async {
+    final client = ref.read(clientProvider);
+    for (var i = 0; i < 15; i++) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      try {
+        final fresh = await client.listArtifacts();
+        final shot = fresh.firstWhere(
+          (a) =>
+              (a['content_type'] as String? ?? '').startsWith('image/') &&
+              !widget.before.contains(a['id']),
+          orElse: () => const {},
+        );
+        if (shot.isNotEmpty) {
+          setState(() => _url = shot['url'] as String);
+          return;
+        }
+      } on ProblemException {
+        // keep polling
+      }
+    }
+    if (mounted) setState(() => _error = 'No frame arrived — is the device online?');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${widget.deviceName} — screen', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          if (_error != null)
+            Text(_error!)
+          else if (_url == null)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('Capturing…'),
+              ]),
+            )
+          else
+            FutureBuilder<Uint8List>(
+              future: ref.read(clientProvider).artifactBytes(_url!),
+              builder: (context, snap) => snap.hasData
+                  ? InteractiveViewer(child: Image.memory(snap.data!))
+                  : const Padding(
+                      padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+            ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ]),
+      ),
+    );
   }
 }

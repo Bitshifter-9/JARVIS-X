@@ -32,7 +32,7 @@ shippable on its own; the batches below are the order of work.
 22. ✅ Battery & storage read on the phone (system.info for Android)
 23. ✅ Toggle phone flashlight / brightness
 24. ✅ Find-my-devices (last known location per device, opens in Maps)
-25. ⬜ Screen mirror / one-frame view of a device
+25. ✅ Screen mirror / one-frame view of a device
 26. ✅ Clipboard synced across devices
 27. ✅ Open a specific app screen (deep-link presets library)
 28. ⬜ Media remote (play/pause/next across Mac & phone)
