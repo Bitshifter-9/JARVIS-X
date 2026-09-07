@@ -242,6 +242,14 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         const SizedBox(height: 8),
         const _VoiceSettings(),
         const SizedBox(height: 8),
+        _QuietHours(
+          current: widget.fields.firstWhere(
+                (f) => f['name'] == 'quiet_hours',
+                orElse: () => const {'value': ''},
+              )['value'] as String? ??
+              '',
+        ),
+        const SizedBox(height: 8),
         const _Memories(),
         const SizedBox(height: 8),
         const _Diagnostics(),
@@ -827,6 +835,104 @@ class _VoiceSettingsState extends State<_VoiceSettings> {
             ),
         ]),
       ),
+    );
+  }
+}
+
+/// Do-not-disturb / quiet hours (FEATURES-50 #29). Jarvis holds non-urgent notifications
+/// during this window — enforced on the server, so it applies to every device at once.
+class _QuietHours extends ConsumerStatefulWidget {
+  const _QuietHours({required this.current});
+
+  final String current; // "HH:MM-HH:MM" or ""
+
+  @override
+  ConsumerState<_QuietHours> createState() => _QuietHoursState();
+}
+
+class _QuietHoursState extends ConsumerState<_QuietHours> {
+  late bool _enabled;
+  late TimeOfDay _start;
+  late TimeOfDay _end;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final parsed = _parse(widget.current);
+    _enabled = parsed != null;
+    _start = parsed?.$1 ?? const TimeOfDay(hour: 22, minute: 30);
+    _end = parsed?.$2 ?? const TimeOfDay(hour: 7, minute: 0);
+  }
+
+  static (TimeOfDay, TimeOfDay)? _parse(String v) {
+    final m = RegExp(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$').firstMatch(v.trim());
+    if (m == null) return null;
+    return (
+      TimeOfDay(hour: int.parse(m.group(1)!), minute: int.parse(m.group(2)!)),
+      TimeOfDay(hour: int.parse(m.group(3)!), minute: int.parse(m.group(4)!)),
+    );
+  }
+
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    final value = _enabled ? '${_fmt(_start)}-${_fmt(_end)}' : '';
+    try {
+      await ref.read(clientProvider).updateSettings({'quiet_hours': value});
+      ref.invalidate(settingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_enabled ? 'Quiet hours saved' : 'Quiet hours off')));
+      }
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pick(bool start) async {
+    final picked = await showTimePicker(context: context, initialTime: start ? _start : _end);
+    if (picked != null) setState(() => start ? _start = picked : _end = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(children: [
+        SwitchListTile(
+          secondary: const Icon(Icons.do_not_disturb_on_outlined),
+          title: const Text('Do not disturb'),
+          subtitle: Text(_enabled
+              ? 'Quiet ${_fmt(_start)}–${_fmt(_end)} on every device (urgent still breaks through)'
+              : 'Hold non-urgent notifications on a schedule'),
+          value: _enabled,
+          onChanged: _busy ? null : (v) => setState(() => _enabled = v),
+        ),
+        if (_enabled)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(children: [
+              OutlinedButton(onPressed: () => _pick(true), child: Text('From ${_fmt(_start)}')),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: () => _pick(false), child: Text('to ${_fmt(_end)}')),
+              const Spacer(),
+              FilledButton(onPressed: _busy ? null : _save, child: const Text('Save')),
+            ]),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(onPressed: _busy ? null : _save, child: const Text('Save')),
+            ),
+          ),
+      ]),
     );
   }
 }
