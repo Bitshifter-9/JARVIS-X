@@ -70,6 +70,12 @@ async def beat(
     from jarvis.services import activity
 
     await activity.prune(session)
+    # Forget the episodic memories that were never useful, so storage stays bounded.
+    from jarvis.services.memory import MemoryService
+
+    forgotten = await MemoryService(session).prune()
+    if forgotten:
+        log.info("memory_pruned", count=forgotten)
     alerted: list[str] = []
     nudged: list[str] = []
     learned: list[str] = []

@@ -180,7 +180,41 @@ class MemoryService:
             for r in rows
         ]
         scored.sort(key=lambda r: -r.score)
-        return [r for r in scored if r.score >= min_score][:limit]
+        kept = [r for r in scored if r.score >= min_score][:limit]
+
+        # Recall reinforces: a memory that keeps proving useful earns its keep and won't
+        # be pruned. A never-recalled episodic memory stays at its default and ages out.
+        if kept:
+            await self.session.execute(
+                text(
+                    "UPDATE memories SET importance = LEAST(1.0, importance + 0.05) "
+                    "WHERE id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"ids": [str(r.id) for r in kept]},
+            )
+        return kept
+
+    async def prune(self, *, now: datetime | None = None) -> int:
+        """The 'forget' tier (second-brain optimisation): drop episodic memories that have
+        aged past the TTL and were never reinforced by recall or repetition. Semantic and
+        source memories — durable facts — are kept. Bounds storage as capture grows."""
+        from datetime import timedelta
+
+        from jarvis.core.config import get_settings
+
+        ttl = get_settings().memory_episodic_ttl_days
+        if ttl <= 0:
+            return 0
+        cutoff = (now or datetime.now(UTC)) - timedelta(days=ttl)
+        result = await self.session.execute(
+            text(
+                "DELETE FROM memories WHERE kind = 'episodic' "
+                "AND importance <= 0.5 AND created_at < :cutoff"
+            ),
+            {"cutoff": cutoff},
+        )
+        await self.session.flush()
+        return result.rowcount or 0
 
     async def context_for(self, user_id: uuid.UUID, query: str, *, limit: int = 5) -> str:
         """Retrieved memory as prompt text, with citations and no credentials."""

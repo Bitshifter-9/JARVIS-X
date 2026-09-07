@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     gmail_poll_seconds: int = Field(
         default=14400, description="Seconds between connector scans (Gmail, Slack). 4h."
     )
+    # The 'forget' tier: episodic memories never reinforced by recall are dropped after
+    # this many days, to bound storage. 0 disables pruning. Semantic facts are kept.
+    memory_episodic_ttl_days: int = Field(
+        default=45, description="Days before an unused episodic memory is forgotten (0=never)"
+    )
     slack_scan_enabled: bool = True
 
     # ── YouTube pipeline ───────────────────────────────────────────────
