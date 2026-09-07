@@ -154,6 +154,15 @@ class InterviewIn(BaseModel):
     answers: dict[str, str] = Field(default_factory=dict)
 
 
+@router.get("/profile/phrasebook")
+async def get_phrasebook(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Your recurring names, jargon and acronyms, learned from your own words (#13). Free —
+    proper-noun frequency, no model. What the transcriber and drafter should never mishear."""
+    from jarvis.services.phrasebook import phrasebook
+
+    return {"terms": await phrasebook(session, user.id)}
+
+
 @router.get("/profile/interview")
 async def interview_questions(user: CurrentUser) -> list[dict[str, str]]:  # noqa: ARG001
     return [{"key": k, "question": q} for k, q in INTERVIEW]

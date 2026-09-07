@@ -27,6 +27,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _upcoming = const [];
   List<Map<String, dynamic>> _owed = const [];
   List<Map<String, dynamic>> _resurface = const [];
+  List<Map<String, dynamic>> _phrasebook = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -58,6 +59,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.upcoming(),
         client.owedReplies(),
         client.resurfacedMemories(),
+        client.phrasebook(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -73,6 +75,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _upcoming = results[9] as List<Map<String, dynamic>>;
         _owed = results[10] as List<Map<String, dynamic>>;
         _resurface = results[11] as List<Map<String, dynamic>>;
+        _phrasebook = results[12] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -160,6 +163,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_travel.isNotEmpty) _TravelCard(trips: _travel),
                       if (_travel.isNotEmpty) const SizedBox(height: 8),
                       _LabelsCard(labels: _labels),
+                      if (_phrasebook.isNotEmpty) const SizedBox(height: 8),
+                      if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
                     ],
                   ),
                 ),
@@ -656,6 +661,41 @@ class _ResurfaceCard extends StatelessWidget {
                 ),
               ]),
             ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Your personal phrasebook: the recurring names, jargon and acronyms JARVIS learned from
+/// your own words (second-brain #13) — what it should never mishear.
+class _PhrasebookCard extends StatelessWidget {
+  const _PhrasebookCard({required this.terms});
+  final List<Map<String, dynamic>> terms;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.menu_book_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Your words', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text('Names and terms you use often — so JARVIS gets them right.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 10),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final t in terms)
+              Chip(
+                visualDensity: VisualDensity.compact,
+                label: Text('${t['term']}'),
+              ),
+          ]),
         ]),
       ),
     );

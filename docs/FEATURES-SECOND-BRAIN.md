@@ -49,6 +49,11 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#23 Instant contextual recall** — "Ask JARVIS" in the search box answers a question from
   your whole captured world (mail, deadlines, chat, memory) with each claim sourced; free keyword
   retrieval, cascade synthesis (local/free first), degrades to the sources if no model answers.
+- ✅ **#13 Personal phrasebook** — a "Your words" card lists the recurring names/jargon/acronyms
+  mined from your own messages (deterministic, no model), the vocabulary the transcriber/drafter
+  should never mishear.
+- ✅ **#11 Personal style model** — already in place: a one-click style card from your sent mail
+  (`learned_style`) that triage and drafting read so replies sound like you.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -83,12 +88,17 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 
 ## B. The learning layer — becoming *you*
 
-11. ⬜ **Personal style model.** Learn your writing/speaking voice (sentence length, tone,
-    emoji, sign-offs) so every draft sounds like you, not like a chatbot.
+11. ✅ **Personal style model.** Learn your writing/speaking voice (sentence length, tone,
+    emoji, sign-offs) so every draft sounds like you, not like a chatbot. *Already shipped:*
+    `POST /v1/profile/learn-style` reads your sent mail on request and writes a style card to
+    `profile.learned_style`, which triage/drafting already read. (A cheap always-on stats
+    fallback from chat, and auto-refresh, are the later upgrades.)
 12. ⬜ **Speech-pattern profile.** Pace, filler words, the phrases you lean on — used both to
     draft in your voice and to coach (§D).
-13. ⬜ **Personal phrasebook.** Your recurring jargon, names, and acronyms → feeds the
-    transcriber and drafter so it stops mishearing "Guru Vai" as "guruvhy."
+13. ✅ **Personal phrasebook.** Your recurring jargon, names, and acronyms → feeds the
+    transcriber and drafter so it stops mishearing "Guru Vai" as "guruvhy." Deterministic
+    proper-noun/acronym frequency over your own words (chat + the profile you wrote), no model;
+    a "Your words" card on Insights. (Wiring it into the transcriber/drafter is the next step.)
 14. 🚧 **Preference learning from choices.** Every accept/reject/edit of a suggestion trains a
     lightweight ranker — the system's taste converges on yours. *Shipped:* dislike a reminder →
     its sender/channel is muted so it stops nagging (a "Muted" section on Goals holds the rules).
