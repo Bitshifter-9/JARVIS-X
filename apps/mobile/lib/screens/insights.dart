@@ -28,6 +28,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _owed = const [];
   List<Map<String, dynamic>> _resurface = const [];
   List<Map<String, dynamic>> _phrasebook = const [];
+  List<Map<String, dynamic>> _people = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -60,6 +61,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.owedReplies(),
         client.resurfacedMemories(),
         client.phrasebook(),
+        client.relationships(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -76,6 +78,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _owed = results[10] as List<Map<String, dynamic>>;
         _resurface = results[11] as List<Map<String, dynamic>>;
         _phrasebook = results[12] as List<Map<String, dynamic>>;
+        _people = results[13] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -135,6 +138,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_owed.isNotEmpty) const SizedBox(height: 8),
                       if (_resurface.isNotEmpty) _ResurfaceCard(items: _resurface),
                       if (_resurface.isNotEmpty) const SizedBox(height: 8),
+                      if (_people.any((p) => p['quiet'] == true))
+                        _PeopleCard(people: _people),
+                      if (_people.any((p) => p['quiet'] == true))
+                        const SizedBox(height: 8),
                       if (_commitments.isNotEmpty)
                         _CommitmentsCard(
                           commitments: _commitments,
@@ -696,6 +703,62 @@ class _PhrasebookCard extends StatelessWidget {
                 label: Text('${t['term']}'),
               ),
           ]),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Relationship cadence: people you usually keep up with but have gone quiet on — the
+/// reconnect nudge (second-brain #16). Only the quiet ones surface; staying in touch needs
+/// no reminder.
+class _PeopleCard extends StatelessWidget {
+  const _PeopleCard({required this.people});
+  final List<Map<String, dynamic>> people;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final quiet = people.where((p) => p['quiet'] == true).toList();
+    return Card(
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.diversity_3_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Reconnect?', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text("People you usually keep up with, but haven't lately.",
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          for (final p in quiet)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                radius: 16,
+                backgroundColor: scheme.surface,
+                child: Text(
+                  ((p['name'] as String?)?.trim().isNotEmpty ?? false)
+                      ? (p['name'] as String).trim()[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(color: scheme.onSurface),
+                ),
+              ),
+              title: Text('${p['name']}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text([
+                if (p['relation'] != null) '${p['relation']}',
+                'usually every ${p['cadence_days']}d',
+              ].join(' · ')),
+              trailing: Text('${p['days_since']}d ago',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.error)),
+            ),
         ]),
       ),
     );

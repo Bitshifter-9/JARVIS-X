@@ -54,6 +54,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   should never mishear.
 - ✅ **#11 Personal style model** — already in place: a one-click style card from your sent mail
   (`learned_style`) that triage and drafting read so replies sound like you.
+- ✅ **#16 Relationship cadence** — a "Reconnect?" card surfaces people you usually keep up with
+  but have gone quiet on, from the rhythm of your correspondence (deterministic, no model).
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -104,8 +106,11 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     its sender/channel is muted so it stops nagging (a "Muted" section on Goals holds the rules).
 15. ⬜ **Rhythm model.** When you focus, when you slump, your energy curve by hour/day —
     so JARVIS schedules and nudges *when you're actually receptive*.
-16. ⬜ **Deepened relationship graph.** Who matters, how you talk to them, your usual
-    cadence — extends the existing knowledge graph with people-edges + contact intervals.
+16. ✅ **Deepened relationship graph.** Who matters, how you talk to them, your usual
+    cadence — extends the existing people graph with contact intervals. Deterministic: groups
+    your correspondents, reads the gaps between messages as a typical cadence, and flags anyone
+    you usually keep up with but have gone quiet on. A "Reconnect?" card on Insights. (Phone/
+    WhatsApp, where the person is in the notification title, is the later extension.)
 17. ⬜ **Interest drift model.** What you care about *now* vs. what you're drifting from, so
     briefings track your actual attention, not a stale profile.
 18. ⬜ **Private mood/sentiment trend.** From journals and your own messages, on-device only —
