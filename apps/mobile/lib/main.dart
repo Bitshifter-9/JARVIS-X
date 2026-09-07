@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'l10n/app_localizations.dart';
 
 import 'node/platform_hooks.dart';
 import 'screens/home.dart';
@@ -75,12 +78,31 @@ class _JarvisAppState extends ConsumerState<JarvisApp> {
     final signedIn = ref.watch(authProvider).signedIn;
 
     return MaterialApp(
-      title: 'JARVIS X',
+      onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
       scaffoldMessengerKey: messengerKey,
       debugShowCheckedModeBanner: false,
+      // Localisation scaffold, English first (FEATURES-50 #49).
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ref.watch(themeModeProvider),
+      // Accessibility (FEATURES-50 #47): honour the OS font-size setting, bounded so a
+      // very large scale enlarges text without shattering dense layouts.
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(minScaleFactor: 1.0, maxScaleFactor: 1.5),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: signedIn ? const HomeScreen() : const SignInScreen(),
     );
   }

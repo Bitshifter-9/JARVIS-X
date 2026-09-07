@@ -1,0 +1,8 @@
+{
+  "@@locale": "en",
+  "appTitle": "JARVIS X",
+  "@appTitle": { "description": "The application name" },
+  "insights": "Insights",
+  "goals": "Goals",
+  "settings": "Settings"
+}

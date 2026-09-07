@@ -31,6 +31,7 @@ class GoalsScreen extends ConsumerWidget {
           data: (list) => ListView(
             padding: const EdgeInsets.only(top: 8, bottom: 96),
             children: [
+              _MonthCalendar(tasks: tasks.valueOrNull ?? const []),
               _Deadlines(tasks: tasks.valueOrNull ?? const []),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
@@ -563,5 +564,172 @@ class _Checklist extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
+  }
+}
+
+/// A month grid with a dot on every day that has a deadline (FEATURES-50 #10). Collapsed
+/// by default; tap a dotted day to see that day's deadlines.
+class _MonthCalendar extends StatefulWidget {
+  const _MonthCalendar({required this.tasks});
+
+  final List<Task> tasks;
+
+  @override
+  State<_MonthCalendar> createState() => _MonthCalendarState();
+}
+
+class _MonthCalendarState extends State<_MonthCalendar> {
+  late DateTime _month; // first of the shown month
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month);
+  }
+
+  Map<int, List<Task>> get _byDay {
+    final out = <int, List<Task>>{};
+    for (final t in widget.tasks) {
+      final d = t.dueAt;
+      if (d != null && d.year == _month.year && d.month == _month.month) {
+        out.putIfAbsent(d.day, () => []).add(t);
+      }
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final byDay = _byDay;
+    final first = _month;
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final leadingBlanks = first.weekday % 7; // Sun=0
+    final today = DateTime.now();
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Column(children: [
+        ListTile(
+          leading: const Icon(Icons.calendar_month_outlined),
+          title: Text(DateFormat('MMMM yyyy').format(_month)),
+          subtitle: Text('${byDay.length} day${byDay.length == 1 ? '' : 's'} with deadlines'),
+          trailing: Icon(_open ? Icons.expand_less : Icons.expand_more),
+          onTap: () => setState(() => _open = !_open),
+        ),
+        if (_open)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Column(children: [
+              Row(children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () =>
+                      setState(() => _month = DateTime(_month.year, _month.month - 1)),
+                ),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      for (final d in const ['S', 'M', 'T', 'W', 'T', 'F', 'S'])
+                        Text(d, style: Theme.of(context).textTheme.labelSmall),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () =>
+                      setState(() => _month = DateTime(_month.year, _month.month + 1)),
+                ),
+              ]),
+              GridView.count(
+                crossAxisCount: 7,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  for (var i = 0; i < leadingBlanks; i++) const SizedBox.shrink(),
+                  for (var day = 1; day <= daysInMonth; day++)
+                    _DayCell(
+                      day: day,
+                      hasDeadline: byDay.containsKey(day),
+                      isToday: today.year == _month.year &&
+                          today.month == _month.month &&
+                          today.day == day,
+                      onTap: byDay.containsKey(day)
+                          ? () => _showDay(context, day, byDay[day]!)
+                          : null,
+                    ),
+                ],
+              ),
+            ]),
+          ),
+      ]),
+    );
+  }
+
+  void _showDay(BuildContext context, int day, List<Task> tasks) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            title: Text(DateFormat('EEEE d MMMM')
+                .format(DateTime(_month.year, _month.month, day))),
+          ),
+          for (final t in tasks)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.event, size: 20),
+              title: Text(t.title),
+              subtitle: Text(DateFormat('HH:mm').format(t.dueAt!)),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _DayCell extends StatelessWidget {
+  const _DayCell({
+    required this.day,
+    required this.hasDeadline,
+    required this.isToday,
+    this.onTap,
+  });
+
+  final int day;
+  final bool hasDeadline;
+  final bool isToday;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      customBorder: const CircleBorder(),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isToday ? scheme.primaryContainer : null,
+          ),
+          alignment: Alignment.center,
+          child: Text('$day', style: Theme.of(context).textTheme.bodySmall),
+        ),
+        SizedBox(
+          height: 6,
+          child: hasDeadline
+              ? Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: scheme.primary, shape: BoxShape.circle),
+                )
+              : null,
+        ),
+      ]),
+    );
   }
 }

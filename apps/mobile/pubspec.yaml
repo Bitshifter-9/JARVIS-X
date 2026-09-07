@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   flutter_riverpod: ^2.6.1
   http: ^1.2.2
   intl: ^0.20.2
@@ -40,6 +42,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
 
 # `dart run flutter_launcher_icons` regenerates every platform icon from assets/icon.
 flutter_launcher_icons:

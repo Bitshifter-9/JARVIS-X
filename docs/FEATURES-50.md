@@ -13,7 +13,7 @@ shippable on its own; the batches below are the order of work.
 7. ✅ Quick-add natural language ("pay rent friday 6pm") parsed by the regex + model
 8. ✅ Overdue digest ("3 things slipped — reschedule or drop?")
 9. ✅ "Focus next" — the one thing to do now, from the risk engine
-10. ⬜ Calendar month grid with dots on days that have deadlines
+10. ✅ Calendar month grid with dots on days that have deadlines
 
 ## B. Chat & the agent
 11. ✅ Search across conversations
@@ -58,9 +58,9 @@ shippable on its own; the batches below are the order of work.
 44. ✅ Data export & account wipe
 45. ✅ Audit log viewer with filters
 46. ⬜ Offline banner + queued actions replay
-47. ⬜ Accessibility pass (font scale, contrast, labels)
+47. ✅ Accessibility pass (font scale, contrast, labels)
 48. ⬜ Widgets (Android home-screen "next deadline")
-49. ⬜ Localisation scaffold (English first)
+49. ✅ Localisation scaffold (English first)
 50. ✅ Command palette on Mac (⌘K → searchable actions)
 
 ## Batches
