@@ -263,3 +263,40 @@ async def test_a_bad_format_fails_closed(session, user, artifact_dir):
     outcome = await dispatch_action(session, proposal.action.id)
     assert outcome["verdict"] == "failed"
     assert await session.scalar(select(Artifact)) is None
+
+
+async def test_the_persona_library_loads_and_resolves(client, auth):
+    """The agency-agents-style role library shows up as built-in, groups correctly,
+    resolves to a real prompt fragment, and cannot be overwritten."""
+    from jarvis.services.personas import library
+
+    lib = library()
+    assert "senior-engineer" in lib and "security-architect" in lib
+    assert lib["senior-engineer"]["name"] == "Senior Engineer"
+    assert lib["senior-engineer"]["instructions"]  # non-empty prompt fragment
+
+    rows = (await client.get("/v1/personas", headers=auth)).json()
+    by_key = {p["key"]: p for p in rows}
+    assert by_key["senior-engineer"]["builtin"] is True
+    assert by_key["senior-engineer"]["group"] == "library"
+    assert by_key["jarvis"]["group"] == "preset"
+
+    # A library key is not editable, like a preset.
+    r = await client.put(
+        "/v1/personas/senior-engineer",
+        json={"name": "x", "instructions": "y"},
+        headers=auth,
+    )
+    assert r.status_code == 409
+
+
+async def test_a_bare_agency_agents_file_parses(tmp_path):
+    from jarvis.services.personas import _parse_persona_md
+
+    spec = _parse_persona_md(
+        "frontend-developer",
+        "# Frontend Developer\n\nBuilds accessible UI.\n\nWorkflow: review, test, ship.",
+    )
+    assert spec["name"] == "Frontend Developer"
+    assert spec["description"] == "Builds accessible UI."
+    assert "Workflow" in spec["instructions"]

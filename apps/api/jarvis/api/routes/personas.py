@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 
 from jarvis.api.deps import CurrentUser, SessionDep
 from jarvis.core.errors import Conflict, NotFound
-from jarvis.services.personas import PRESETS, delete_persona, list_personas, save_persona, slug
+from jarvis.services.personas import (
+    PRESETS,
+    delete_persona,
+    library,
+    list_personas,
+    save_persona,
+    slug,
+)
 
 router = APIRouter(prefix="/v1/personas", tags=["personas"])
 
@@ -30,7 +37,7 @@ async def put_persona(
     key: str, body: PersonaIn, user: CurrentUser, session: SessionDep
 ) -> dict[str, Any]:
     key = slug(key)
-    if key in PRESETS:
+    if key in PRESETS or key in library():
         raise Conflict("Built-in personas cannot be edited; save yours under another name")
     return await save_persona(
         session, user.id, key, name=body.name, instructions=body.instructions,

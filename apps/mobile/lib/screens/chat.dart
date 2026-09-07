@@ -580,18 +580,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   color: _persona == 'jarvis' ? null : Theme.of(context).colorScheme.primary),
               initialValue: _persona,
               onSelected: (v) => setState(() => _persona = v),
-              itemBuilder: (context) => [
-                for (final p in personas)
-                  PopupMenuItem(
-                    value: p['key'] as String,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                      Text(p['name'] as String),
-                      if ((p['description'] as String? ?? '').isNotEmpty)
-                        Text(p['description'] as String,
-                            style: Theme.of(context).textTheme.labelSmall),
-                    ]),
-                  ),
-              ],
+              itemBuilder: (context) => _groupedPersonaItems(context, personas),
             );
           }),
           PopupMenuButton<String>(
@@ -1148,4 +1137,43 @@ class _ThumbsState extends ConsumerState<_Thumbs> {
       ),
     ]);
   }
+}
+
+/// The persona menu, grouped: presets, the role library (agency-agents-derived), then
+/// the user's own. A flat list of 20+ roles is unusable; the sections make it scannable.
+List<PopupMenuEntry<String>> _groupedPersonaItems(
+    BuildContext context, List<Map<String, dynamic>> personas) {
+  const order = ['preset', 'library', 'custom'];
+  const titles = {'preset': 'Presets', 'library': 'Role library', 'custom': 'Yours'};
+  final items = <PopupMenuEntry<String>>[];
+  for (final group in order) {
+    final inGroup = personas.where((p) => (p['group'] ?? 'preset') == group).toList();
+    if (inGroup.isEmpty) continue;
+    if (items.isNotEmpty) items.add(const PopupMenuDivider());
+    items.add(PopupMenuItem<String>(
+      enabled: false,
+      height: 28,
+      child: Text(titles[group]!,
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+    ));
+    for (final p in inGroup) {
+      items.add(PopupMenuItem<String>(
+        value: p['key'] as String,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(p['name'] as String),
+            if ((p['description'] as String? ?? '').isNotEmpty)
+              Text(p['description'] as String,
+                  style: Theme.of(context).textTheme.labelSmall),
+          ],
+        ),
+      ));
+    }
+  }
+  return items;
 }
