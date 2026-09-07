@@ -93,6 +93,20 @@
                 <action android:name="android.service.notification.NotificationListenerService"/>
             </intent-filter>
         </service>
+        <!-- home_widget pulls in WorkManager, whose startup auto-initializer crashes on
+             launch (Failed to create WorkDatabase). We only use saveWidgetData/updateWidget,
+             which don't need it, so remove that initializer node. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <!-- Home-screen widget: next deadline (FEATURES-50 #48). -->
         <receiver
             android:name=".NextDeadlineWidget"
