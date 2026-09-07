@@ -7,6 +7,7 @@ import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -553,7 +554,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _composer(BuildContext context) {
     return SafeArea(
-      child: Padding(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _suggestionChips(context),
+        Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
         child: Row(children: [
           if (isDesktop)
@@ -604,6 +607,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 PopupMenuItem(value: e.key, child: Text(e.value)),
             ],
           ),
+          IconButton(
+            tooltip: 'Attach image',
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            onPressed: _busy ? null : _attachImage,
+          ),
           Expanded(
             child: TextField(
               controller: _input,
@@ -642,6 +650,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
         ]),
+        ),
+      ]),
+    );
+  }
+
+  /// Follow-up chips after the last answer (FEATURES-50 #15). Tapping one sends it.
+  Widget _suggestionChips(BuildContext context) {
+    if (_busy || _turns.isEmpty || _turns.last.role != 'assistant' || _turns.last.streaming) {
+      return const SizedBox.shrink();
+    }
+    final chips = followUps(_turns.last.content);
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (final c in chips)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ActionChip(
+                label: Text(c),
+                visualDensity: VisualDensity.compact,
+                onPressed: () {
+                  _input.text = c;
+                  _send();
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -808,6 +847,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     '/locate': 'Where is my phone?',
     '/week': 'Give me my weekly review',
   };
+
+  Future<void> _attachImage() async {
+    final XFile? file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    final question = _input.text.trim();
+    _input.clear();
+    setState(() {
+      _turns.add(_Turn('user', question.isEmpty ? '📷 (image)' : '📷 $question'));
+      _busy = true;
+    });
+    _autoScroll();
+    try {
+      final text = await ref
+          .read(clientProvider)
+          .describeImage(bytes, file.name, question: question.isEmpty ? null : question);
+      if (!mounted) return;
+      setState(() {
+        _turns.add(_Turn('assistant', text));
+        _busy = false;
+      });
+      _autoScroll();
+      if (_speak) await _say(text);
+    } on ProblemException catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
 
   Future<void> _send() async {
     var text = _input.text.trim();
@@ -1188,4 +1261,20 @@ List<PopupMenuEntry<String>> _groupedPersonaItems(
     }
   }
   return items;
+}
+
+/// Up to three follow-up suggestions for the last answer (FEATURES-50 #15). Pure, so it
+/// is unit-tested; the chips are generic-but-useful, no extra model call.
+List<String> followUps(String reply) {
+  final r = reply.toLowerCase();
+  final out = <String>[];
+  if (r.contains('deadline') || r.contains('due') || r.contains(' task')) {
+    out.add('Add to my deadlines');
+  }
+  if (r.contains('email') || r.contains('message') || r.contains('reply')) {
+    out.add('Draft a reply');
+  }
+  if (reply.length > 400) out.add('Summarise that');
+  out.add('Tell me more');
+  return out.toSet().take(3).toList();
 }

@@ -468,6 +468,24 @@ class JarvisClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Attach an image to chat and get a description (FEATURES-50 #16).
+  Future<String> describeImage(List<int> bytes, String filename, {String? question}) async {
+    Future<http.Response> attempt() async {
+      final request = http.MultipartRequest('POST', _uri('/v1/chat/vision'))
+        ..headers.addAll({if (_token != null) 'Authorization': 'Bearer $_token'})
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      if (question != null && question.isNotEmpty) request.fields['question'] = question;
+      return http.Response.fromStream(await _http.send(request));
+    }
+
+    var response = await attempt();
+    if (response.statusCode == 401 && await refresh()) {
+      response = await attempt();
+    }
+    if (response.statusCode >= 400) throw _problem(response);
+    return (jsonDecode(response.body) as Map<String, dynamic>)['text'] as String? ?? '';
+  }
+
   // ── standing permissions (PLAN.md 10.9.2) ─────────────────────────
   Future<List<Map<String, dynamic>>> permissions() async {
     final data = await _send('GET', '/v1/permissions') as List<dynamic>;

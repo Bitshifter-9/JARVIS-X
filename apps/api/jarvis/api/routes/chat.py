@@ -16,10 +16,10 @@ import json
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -179,6 +179,27 @@ async def patch_conversation(
         conversation.pinned_at = datetime.now(UTC) if body.pinned else None
     await session.flush()
     return _conversation_out(conversation)
+
+
+@router.post("/chat/vision")
+async def chat_vision(
+    user: CurrentUser,
+    session: SessionDep,
+    file: Annotated[UploadFile, File()],
+    question: Annotated[str | None, Form()] = None,
+) -> dict[str, Any]:
+    """Attach an image to chat (FEATURES-50 #16): describe it with the vision model.
+    The image is looked at, not stored, and text inside it is treated as data."""
+    from jarvis.services.vision import describe
+
+    settings = get_settings()
+    data = await file.read(settings.artifact_max_bytes + 1)
+    if len(data) > settings.artifact_max_bytes:
+        raise ValueError("image exceeds the size limit")
+    text = await describe(
+        session, user.id, data, file.content_type or "image/jpeg", question
+    )
+    return {"text": text}
 
 
 @router.post("/conversations/{conversation_id}/export")
