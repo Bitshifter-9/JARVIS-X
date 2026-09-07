@@ -25,7 +25,7 @@ shippable on its own; the batches below are the order of work.
 17. ⬜ Message reactions / mark helpful
 18. ⬜ Export a conversation to a document
 19. ⬜ Voice reply speed & voice picker
-20. ⬜ "Continue where we left off" on launch
+20. ✅ "Continue where we left off" on launch
 
 ## C. Devices & control
 21. ⬜ Stay connected in the background via FCM-woken execution
@@ -54,7 +54,7 @@ shippable on its own; the batches below are the order of work.
 ## E. Polish, trust & platform
 41. ✅ First-run onboarding (persona interview surfaced on launch)
 42. ✅ Settings search
-43. ⬜ In-app changelog / "what's new"
+43. ✅ In-app changelog / "what's new"
 44. ✅ Data export & account wipe
 45. ✅ Audit log viewer with filters
 46. ⬜ Offline banner + queued actions replay

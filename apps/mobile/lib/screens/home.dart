@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models.dart';
@@ -9,6 +10,7 @@ import '../state/providers.dart';
 import '../theme.dart';
 import '../widgets/orb.dart';
 import 'approvals.dart';
+import 'changelog.dart';
 import 'chat.dart';
 import 'command_palette.dart';
 import 'connections.dart';
@@ -45,6 +47,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   set _index(int value) => ref.read(homeTabProvider.notifier).state = value;
   Timer? _refresh;
 
+  static const _tabPrefKey = 'home_tab';
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +57,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // the visible tab is refreshed on every switch, every 45 s, and when the app
     // comes back to the front.
     _refresh = Timer.periodic(const Duration(seconds: 45), (_) => _refreshTab(_current));
+    _restoreTab(); // continue where we left off (FEATURES-50 #20)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Changelog.showIfNew(context); // what's new, once (FEATURES-50 #43)
+    });
+  }
+
+  Future<void> _restoreTab() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getInt(_tabPrefKey);
+      if (saved != null && saved >= 0 && saved < _all.length && mounted && _current == 0) {
+        _index = saved;
+      }
+    } catch (_) {
+      // No prefs (first run, private mode): default tab is fine.
+    }
+  }
+
+  Future<void> _saveTab(int i) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_tabPrefKey, i);
+    } catch (_) {}
   }
 
   @override
@@ -110,7 +137,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     ref.listen(homeTabProvider, (previous, next) {
-      if (previous != next) _refreshTab(next);
+      if (previous != next) {
+        _refreshTab(next);
+        _saveTab(next);
+      }
     });
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final pending = (ref.watch(approvalsProvider).valueOrNull ?? const [])

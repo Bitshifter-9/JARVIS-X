@@ -11,6 +11,7 @@ import '../api/models.dart';
 import '../state/providers.dart';
 import '../theme.dart';
 import 'audit.dart';
+import 'changelog.dart';
 import '../voice/wake_service.dart';
 
 /// Every `JARVIS_*` variable, editable in place, prefilled with what the server is
@@ -240,6 +241,17 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         const _Memories(),
         const SizedBox(height: 8),
         const _Diagnostics(),
+        const SizedBox(height: 8),
+        Card(
+          margin: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text("What's new"),
+            subtitle: Text('Version ${Changelog.latest}'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Changelog.open(context),
+          ),
+        ),
         const SizedBox(height: 8),
         const _YourData(),
         const SizedBox(height: 16),
