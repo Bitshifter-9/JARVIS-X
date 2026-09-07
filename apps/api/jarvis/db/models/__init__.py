@@ -18,6 +18,7 @@ from jarvis.db.models.agent import (
 from jarvis.db.models.chat import ChatMessage, Conversation
 from jarvis.db.models.domain import (
     Commitment,
+    Decision,
     Goal,
     GoalPrediction,
     ReminderMute,
@@ -84,6 +85,7 @@ __all__ = [
     "Evidence",
     "ExtractionCache",
     "Commitment",
+    "Decision",
     "ReminderMute",
     "Goal",
     "GoalPrediction",

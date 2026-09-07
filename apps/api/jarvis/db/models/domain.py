@@ -200,3 +200,25 @@ class ReminderMute(UUIDPrimaryKey, Timestamps, Base):
     label: Mapped[str] = mapped_column(String(360), nullable=False)
     provider: Mapped[str | None] = mapped_column(String(32))
     author: Mapped[str | None] = mapped_column(String(320))
+
+
+class Decision(UUIDPrimaryKey, Timestamps, Base):
+    """A decision you made and why, so weeks later you can ask "did it work?" and learn to
+    decide better (second-brain #39). The review resurfaces it once ``review_at`` passes.
+    """
+
+    __tablename__ = "decisions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    reasoning: Mapped[str | None] = mapped_column(Text)
+    expected: Mapped[str | None] = mapped_column(Text)
+    review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # open | reviewed
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    # worked | mixed | didnt
+    outcome: Mapped[str | None] = mapped_column(String(16))
+    outcome_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

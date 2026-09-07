@@ -35,6 +35,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Map<String, dynamic> _mood = const {};
   Map<String, dynamic> _speech = const {};
   List<Map<String, dynamic>> _gaps = const [];
+  List<Map<String, dynamic>> _decisionsDue = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -73,6 +74,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.mood(),
         client.speechProfile(),
         client.knowledgeGaps(),
+        client.decisionsDue(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -95,6 +97,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _mood = results[16] as Map<String, dynamic>;
         _speech = results[17] as Map<String, dynamic>;
         _gaps = results[18] as List<Map<String, dynamic>>;
+        _decisionsDue = results[19] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -121,6 +124,16 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     } finally {
       if (mounted) setState(() => _scanning = false);
     }
+  }
+
+  Future<void> _showLogDecision(BuildContext context) async {
+    final logged = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _LogDecisionSheet(),
+    );
+    if (logged == true) _load();
   }
 
   bool get _hasDrift =>
@@ -180,6 +193,15 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                           },
                         ),
                       if (_commitments.isNotEmpty) const SizedBox(height: 8),
+                      _DecisionsCard(
+                        due: _decisionsDue,
+                        onLog: () => _showLogDecision(context),
+                        onReview: (id, outcome) async {
+                          await ref.read(clientProvider).reviewDecision(id, outcome);
+                          _load();
+                        },
+                      ),
+                      const SizedBox(height: 8),
                       if (_anomalies.isNotEmpty) _AnomalyCard(nudges: _anomalies),
                       if (_anomalies.isNotEmpty) const SizedBox(height: 8),
                       if (_meeting != null) _MeetingCard(meeting: _meeting!),
@@ -1003,6 +1025,158 @@ class _AboutYouCard extends StatelessWidget {
           ],
         ]),
       ),
+    );
+  }
+}
+
+
+/// Decision journal (#39): log a decision and your reasoning; when its review date comes,
+/// answer "did it work?" — so you learn to decide better. Always visible so you can log one;
+/// due-for-review decisions surface here with worked/mixed/didn't.
+class _DecisionsCard extends StatelessWidget {
+  const _DecisionsCard({required this.due, required this.onLog, required this.onReview});
+  final List<Map<String, dynamic>> due;
+  final VoidCallback onLog;
+  final void Function(String id, String outcome) onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.account_tree_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Decisions', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: onLog,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Log'),
+            ),
+          ]),
+          if (due.isEmpty)
+            Text('Log a decision and your reasoning. Weeks later, JARVIS asks how it went.',
+                style: Theme.of(context).textTheme.bodySmall)
+          else ...[
+            Text('Time to review — did it work out?',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 4),
+            for (final d in due)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${d['text']}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  if ((d['expected'] as String?)?.isNotEmpty ?? false)
+                    Text('You expected: ${d['expected']}',
+                        style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 8, children: [
+                    for (final o in const [
+                      ('worked', 'Worked'),
+                      ('mixed', 'Mixed'),
+                      ('didnt', "Didn't")
+                    ])
+                      OutlinedButton(
+                        onPressed: () => onReview(d['id'] as String, o.$1),
+                        child: Text(o.$2),
+                      ),
+                  ]),
+                ]),
+              ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _LogDecisionSheet extends ConsumerStatefulWidget {
+  const _LogDecisionSheet();
+  @override
+  ConsumerState<_LogDecisionSheet> createState() => _LogDecisionSheetState();
+}
+
+class _LogDecisionSheetState extends ConsumerState<_LogDecisionSheet> {
+  final _text = TextEditingController();
+  final _reasoning = TextEditingController();
+  final _expected = TextEditingController();
+  int _days = 30;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _reasoning.dispose();
+    _expected.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_text.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(clientProvider).logDecision(_text.text.trim(),
+          reasoning: _reasoning.text.trim(), expected: _expected.text.trim(), reviewInDays: _days);
+      if (mounted) Navigator.pop(context, true);
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 4, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Log a decision', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _text,
+          autofocus: true,
+          decoration: const InputDecoration(
+              labelText: 'The decision', hintText: 'Take the job · Move to X · Ship the beta'),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _reasoning,
+          decoration: const InputDecoration(labelText: 'Why (your reasoning)'),
+          maxLines: 2,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _expected,
+          decoration: const InputDecoration(labelText: 'What you expect to happen'),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          const Text('Review in'),
+          const SizedBox(width: 12),
+          DropdownButton<int>(
+            value: _days,
+            items: const [
+              DropdownMenuItem(value: 7, child: Text('1 week')),
+              DropdownMenuItem(value: 30, child: Text('1 month')),
+              DropdownMenuItem(value: 90, child: Text('3 months')),
+              DropdownMenuItem(value: 180, child: Text('6 months')),
+            ],
+            onChanged: (v) => setState(() => _days = v ?? 30),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.check),
+          label: Text(_saving ? 'Saving…' : 'Log decision'),
+        ),
+      ]),
     );
   }
 }

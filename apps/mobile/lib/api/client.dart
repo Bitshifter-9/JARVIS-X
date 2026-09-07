@@ -625,6 +625,23 @@ class JarvisClient {
   Future<Map<String, dynamic>> rhythm() async =>
       await _send('GET', '/v1/rhythm') as Map<String, dynamic>;
 
+  // ── decision journal (second-brain #39) ───────────────────────────
+  Future<Map<String, dynamic>> logDecision(String text,
+          {String? reasoning, String? expected, int reviewInDays = 30}) async =>
+      await _send('POST', '/v1/decisions', body: {
+        'text': text,
+        if (reasoning != null && reasoning.isNotEmpty) 'reasoning': reasoning,
+        if (expected != null && expected.isNotEmpty) 'expected': expected,
+        'review_in_days': reviewInDays,
+      }) as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> decisionsDue() async =>
+      (await _send('GET', '/v1/decisions/due') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  Future<void> reviewDecision(String id, String outcome, {String? note}) async =>
+      _send('POST', '/v1/decisions/$id/review',
+          body: {'outcome': outcome, if (note != null && note.isNotEmpty) 'note': note});
+
   /// Private mood trend from your own words (#18) — {enough_data, points, latest, mood}.
   Future<Map<String, dynamic>> mood() async =>
       await _send('GET', '/v1/mood') as Map<String, dynamic>;

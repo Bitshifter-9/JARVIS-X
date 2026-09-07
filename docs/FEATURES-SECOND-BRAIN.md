@@ -65,6 +65,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#18 Mood trend / #12 Speech pattern / #29 Knowledge gaps** — an "About you" card: a
   private weekly sentiment line, the filler words and phrases you lean on, and the topics you
   keep asking about — all deterministic over your own words, no model, private to your account.
+- ✅ **#39 Decision journal** — log a decision, your reasoning and what you expect; when its
+  review date arrives it resurfaces to ask "did it work?" (worked/mixed/didn't), so you learn to
+  decide better. A "Decisions" card on Insights.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -190,8 +193,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     fixes.
 38. ⬜ **Energy/health correlation.** If you connect sleep/steps, correlate them with your
     productivity so you learn what actually moves your day.
-39. ⬜ **Decision journal + outcome review.** Log a decision + your reasoning; weeks later,
-    "did it work?" — so you learn to decide better.
+39. ✅ **Decision journal + outcome review.** Log a decision + your reasoning + what you expect;
+    weeks later, when its review date arrives, JARVIS asks "did it work?" (worked / mixed / didn't)
+    — so you learn to decide better. A "Decisions" card on Insights with a log sheet.
 40. ⬜ **Accountability mode.** Opt-in check-ins that hold you to the commitments in #22.
 
 ## E. Full automation — hands-free on mobile + Mac
