@@ -569,6 +569,14 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> anomalies() async =>
       (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  // ── clipboard synced across devices (FEATURES-50 #26) ─────────────
+  Future<Map<String, dynamic>> getClipboard() async =>
+      await _send('GET', '/v1/clipboard') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> setClipboard(String text, {String? device}) async =>
+      await _send('POST', '/v1/clipboard',
+          body: {'text': text, if (device != null) 'device': device}) as Map<String, dynamic>;
+
   // ── proactivity: streaks and meeting prep ─────────────────────────
   Future<Map<String, dynamic>> streaks() async =>
       await _send('GET', '/v1/proactivity/streaks') as Map<String, dynamic>;

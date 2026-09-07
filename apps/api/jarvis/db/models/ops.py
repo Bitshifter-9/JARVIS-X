@@ -282,6 +282,8 @@ class Profile(Timestamps, Base):
     personas: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     # The nightly learning loop's proposals: {"pending": [...], "dismissed": [...]} (10.6.5).
     suggestions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # The shared clipboard, synced across devices: {text, updated_at, device} (#26).
+    clipboard: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class ChatFeedback(UUIDPrimaryKey, Timestamps, Base):

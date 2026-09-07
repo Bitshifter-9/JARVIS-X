@@ -33,7 +33,7 @@ shippable on its own; the batches below are the order of work.
 23. ✅ Toggle phone flashlight / brightness
 24. ⬜ Find-my-devices map (last locations of all devices)
 25. ⬜ Screen mirror / one-frame view of a device
-26. ⬜ Clipboard history synced across devices
+26. ✅ Clipboard synced across devices
 27. ⬜ Open a specific app screen (deep-link presets library)
 28. ⬜ Media remote (play/pause/next across Mac & phone)
 29. ⬜ Do-Not-Disturb schedule pushed to both devices

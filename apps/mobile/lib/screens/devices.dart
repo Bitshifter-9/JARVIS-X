@@ -53,11 +53,12 @@ class DevicesScreen extends ConsumerWidget {
                 ),
               ])
             : ListView.builder(
-                itemCount: list.length + 2,
+                itemCount: list.length + 3,
                 itemBuilder: (context, i) {
                   if (i == 0) return const _ThisPhoneCard();
                   if (i == 1) return const _TrustCard();
-                  final device = list[i - 2];
+                  if (i == 2) return const _ClipboardCard();
+                  final device = list[i - 3];
                   if (device.platform == 'macos' && !device.revoked) {
                     return _MacCard(device: device);
                   }
@@ -750,4 +751,116 @@ class _RemoveButton extends ConsumerWidget {
           }
         },
       );
+}
+
+/// A clipboard shared across your devices (FEATURES-50 #26). Push this device's
+/// clipboard to the account; pull it on another. Text only, through the one account.
+class _ClipboardCard extends ConsumerStatefulWidget {
+  const _ClipboardCard();
+
+  @override
+  ConsumerState<_ClipboardCard> createState() => _ClipboardCardState();
+}
+
+class _ClipboardCardState extends ConsumerState<_ClipboardCard> {
+  String? _synced;
+  String? _when;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final r = await ref.read(clientProvider).getClipboard();
+      if (mounted) {
+        setState(() {
+          _synced = r['text'] as String?;
+          _when = r['device'] as String?;
+        });
+      }
+    } on ProblemException {
+      // nothing synced yet
+    }
+  }
+
+  Future<void> _push() async {
+    setState(() => _busy = true);
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text ?? '';
+      if (text.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Clipboard is empty')));
+        }
+        return;
+      }
+      await ref.read(clientProvider).setClipboard(text, device: _platform());
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Clipboard pushed')));
+      }
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pull() async {
+    if (_synced == null) return;
+    await Clipboard.setData(ClipboardData(text: _synced!));
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Copied to this device')));
+    }
+  }
+
+  String _platform() {
+    if (kIsWeb) return 'Web';
+    return defaultTargetPlatform == TargetPlatform.macOS ? 'Mac' : 'Phone';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.content_paste, size: 20),
+            const SizedBox(width: 8),
+            Text('Shared clipboard', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 6),
+          Text(
+            _synced == null
+                ? 'Nothing shared yet.'
+                : '“${_synced!.length > 80 ? '${_synced!.substring(0, 80)}…' : _synced!}”'
+                    '${_when != null ? '  · from $_when' : ''}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            FilledButton.tonalIcon(
+              onPressed: _busy ? null : _push,
+              icon: const Icon(Icons.upload, size: 18),
+              label: const Text('Push'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _synced == null ? null : _pull,
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Copy here'),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
 }
