@@ -181,6 +181,50 @@ async def patch_conversation(
     return _conversation_out(conversation)
 
 
+@router.post("/conversations/{conversation_id}/export")
+async def export_conversation(
+    conversation_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+    fmt: str = "md",
+) -> dict[str, Any]:
+    """A whole conversation as a document (FEATURES-50 #18). Returns the Markdown and a
+    stored artifact you can open again from Documents."""
+    from jarvis.db.models.chat import ChatMessage
+    from jarvis.services.documents import render_document, store_artifact
+
+    conversation = await _owned_conversation(session, user.id, conversation_id)
+    messages = (
+        await session.scalars(
+            select(ChatMessage)
+            .where(ChatMessage.conversation_id == conversation_id)
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
+        )
+    ).all()
+    title = conversation.title or "Conversation"
+    lines = [f"# {title}", ""]
+    for m in messages:
+        who = "You" if m.role == "user" else "Jarvis"
+        when = m.created_at.strftime("%d %b %H:%M") if m.created_at else ""
+        lines.append(f"**{who}**{f' · {when}' if when else ''}")
+        lines.append("")
+        lines.append(m.content)
+        lines.append("")
+    markdown = "\n".join(lines)
+
+    data, content_type, filename = await render_document(title, markdown, fmt)
+    artifact = await store_artifact(
+        session, user_id=user.id, kind="document", filename=filename,
+        content_type=content_type, data=data,
+    )
+    await session.flush()
+    return {
+        "artifact": {"id": str(artifact.id), "url": f"/v1/artifacts/{artifact.id}",
+                     "filename": artifact.filename},
+        "markdown": markdown,
+    }
+
+
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: uuid.UUID, user: CurrentUser, session: SessionDep

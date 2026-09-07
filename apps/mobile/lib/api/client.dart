@@ -615,6 +615,9 @@ class JarvisClient {
   Future<void> deleteConversation(String id) async =>
       _send('DELETE', '/v1/conversations/$id');
 
+  Future<Map<String, dynamic>> exportConversation(String id, {String fmt = 'md'}) async =>
+      await _send('POST', '/v1/conversations/$id/export?fmt=$fmt') as Map<String, dynamic>;
+
   Future<List<Map<String, dynamic>>> conversationHistory(String? conversationId) async {
     final data = await _send('GET', '/v1/chat/history',
         query: conversationId == null ? null : {'conversation_id': conversationId}) as List<dynamic>;

@@ -22,9 +22,9 @@ shippable on its own; the batches below are the order of work.
 14. ✅ Slash-commands in chat (/screenshot, /due, /brief)
 15. ⬜ Suggested replies / follow-up chips after an answer
 16. ⬜ Attach an image to a chat message (vision)
-17. ⬜ Message reactions / mark helpful
-18. ⬜ Export a conversation to a document
-19. ⬜ Voice reply speed & voice picker
+17. ✅ Message reactions / mark helpful
+18. ✅ Export a conversation to a document
+19. ✅ Voice reply speed & voice picker
 20. ✅ "Continue where we left off" on launch
 
 ## C. Devices & control

@@ -17,6 +17,7 @@ import '../theme.dart';
 import '../widgets/ambient.dart';
 import '../widgets/orb.dart';
 import 'voice_mode.dart';
+import '../voice/voice_prefs.dart';
 
 /// Talk to Jarvis. Three ways in: type, hold the mic, or enable the wake word and
 /// just say "Jarvis, …". Replies are spoken; state shows in the island up top.
@@ -222,6 +223,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           setState(() => _conversationTitle = title);
                         }
                       }
+                    } else if (v == 'export') {
+                      final r = await client.exportConversation(c['id'] as String);
+                      await Clipboard.setData(
+                          ClipboardData(text: r['markdown'] as String? ?? ''));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Exported — copied, and saved to Documents')));
+                      }
                     } else if (v == 'delete') {
                       await client.deleteConversation(c['id'] as String);
                       if (c['id'] == _conversationId && mounted) {
@@ -239,6 +248,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         value: 'pin',
                         child: Text(c['pinned'] == true ? 'Unpin' : 'Pin')),
                     const PopupMenuItem(value: 'rename', child: Text('Rename')),
+                    const PopupMenuItem(value: 'export', child: Text('Export')),
                     const PopupMenuItem(value: 'delete', child: Text('Delete')),
                   ],
                 ),
@@ -897,11 +907,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _say(String text) async {
     final bytes = await ref.read(clientProvider).ttsBytes(text);
     if (bytes == null) {
+      await VoicePrefs.applyTts(_tts);
       await _tts.speak(text);
       return;
     }
     setState(() => _speaking = true);
     try {
+      await _player.setPlaybackRate(await VoicePrefs.rate());
       await _player.play(BytesSource(bytes));
     } catch (_) {
       setState(() => _speaking = false);

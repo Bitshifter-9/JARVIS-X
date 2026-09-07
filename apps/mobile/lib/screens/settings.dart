@@ -13,6 +13,8 @@ import '../theme.dart';
 import 'audit.dart';
 import 'changelog.dart';
 import '../voice/wake_service.dart';
+import '../voice/voice_prefs.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 /// Every `JARVIS_*` variable, editable in place, prefilled with what the server is
 /// running with right now. Grouped the way `.env.example` is grouped; typed inputs
@@ -237,6 +239,8 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         const _Appearance(),
         const SizedBox(height: 8),
         const _AlwaysListening(),
+        const SizedBox(height: 8),
+        const _VoiceSettings(),
         const SizedBox(height: 8),
         const _Memories(),
         const SizedBox(height: 8),
@@ -728,6 +732,100 @@ class _YourData extends ConsumerWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+/// Voice reply speed and voice picker (FEATURES-50 #19). The speed applies to both the
+/// server voice and the on-device fallback; the picker chooses the on-device voice.
+class _VoiceSettings extends StatefulWidget {
+  const _VoiceSettings();
+
+  @override
+  State<_VoiceSettings> createState() => _VoiceSettingsState();
+}
+
+class _VoiceSettingsState extends State<_VoiceSettings> {
+  final _tts = FlutterTts();
+  double _rate = 1.0;
+  String? _voice; // "name|locale"
+  List<Map<String, String>> _voices = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final rate = await VoicePrefs.rate();
+    final voice = await VoicePrefs.voice();
+    List<Map<String, String>> voices = const [];
+    try {
+      final raw = await _tts.getVoices as List<dynamic>? ?? const [];
+      voices = raw
+          .map((v) => (v as Map).map((k, val) => MapEntry('$k', '$val')))
+          .where((v) => (v['locale'] ?? '').toLowerCase().startsWith('en'))
+          .toList();
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _rate = rate;
+        _voice = voice;
+        _voices = voices;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.record_voice_over_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Voice', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          Row(children: [
+            const Text('Speed'),
+            Expanded(
+              child: Slider(
+                value: _rate,
+                min: 0.5,
+                max: 1.75,
+                divisions: 5,
+                label: '${_rate.toStringAsFixed(2)}×',
+                onChanged: (v) => setState(() => _rate = v),
+                onChangeEnd: (v) => VoicePrefs.setRate(v),
+              ),
+            ),
+            Text('${_rate.toStringAsFixed(2)}×'),
+          ]),
+          if (_voices.isNotEmpty)
+            DropdownButton<String>(
+              isExpanded: true,
+              value: _voices.any((v) => '${v['name']}|${v['locale']}' == _voice)
+                  ? _voice
+                  : null,
+              hint: const Text('On-device voice (default)'),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Default')),
+                for (final v in _voices)
+                  DropdownMenuItem(
+                    value: '${v['name']}|${v['locale']}',
+                    child: Text('${v['name']} (${v['locale']})',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) {
+                setState(() => _voice = v);
+                VoicePrefs.setVoice(v);
+              },
+            ),
+        ]),
       ),
     );
   }
