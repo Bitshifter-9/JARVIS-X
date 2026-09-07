@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,6 +34,9 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
   _Phase _phase = _Phase.starting;
   String _partial = '';
   bool _closed = false;
+  double _amp = 0; // live audio energy for the orb
+  Timer? _speakPulse;
+  final _rand = math.Random();
 
   @override
   void initState() {
@@ -46,9 +50,26 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
   @override
   void dispose() {
     _closed = true;
+    _speakPulse?.cancel();
     _stt.stop();
     _speaker.dispose();
     super.dispose();
+  }
+
+  /// Jarvis has no amplitude signal from the TTS, so drive a lively pulse while it speaks
+  /// and let the orb's waveform dance to it.
+  void _startSpeakPulse() {
+    _speakPulse?.cancel();
+    _speakPulse = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!mounted) return;
+      setState(() => _amp = 0.35 + 0.5 * _rand.nextDouble());
+    });
+  }
+
+  void _stopSpeakPulse() {
+    _speakPulse?.cancel();
+    _speakPulse = null;
+    if (mounted) setState(() => _amp = 0);
   }
 
   Future<void> _loop() async {
@@ -68,6 +89,7 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
       setState(() {
         _lines.add(('user', heard));
         _phase = _Phase.thinking;
+        _amp = 0;
       });
       _history.add({'role': 'user', 'content': heard});
       String reply;
@@ -87,7 +109,9 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
         _lines.add(('assistant', reply));
         _phase = _Phase.speaking;
       });
+      _startSpeakPulse();
       await _speaker.say(reply);
+      _stopSpeakPulse();
     }
   }
 
@@ -99,6 +123,12 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
         pauseFor: const Duration(seconds: 2),
         partialResults: true,
       ),
+      onSoundLevelChange: (level) {
+        if (!mounted) return;
+        // Smooth the mic level into a 0–1 energy the orb can breathe with.
+        final norm = (level.clamp(0.0, 10.0)) / 10.0;
+        setState(() => _amp = _amp * 0.6 + norm * 0.4);
+      },
       onResult: (r) {
         if (mounted) setState(() => _partial = r.recognizedWords);
         if (r.finalResult && !done.isCompleted) done.complete(r.recognizedWords);
@@ -171,7 +201,7 @@ class _VoiceModeScreenState extends ConsumerState<VoiceModeScreen> {
           ),
           GestureDetector(
             onTap: _phase == _Phase.speaking ? _interrupt : null,
-            child: JarvisOrb(state: orb, size: 180),
+            child: JarvisOrb(state: orb, size: 200, amplitude: _amp),
           ),
           const SizedBox(height: 18),
           Padding(
