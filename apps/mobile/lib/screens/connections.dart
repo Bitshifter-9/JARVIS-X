@@ -90,6 +90,7 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
               _Summary(body: body, onSync: _syncing ? null : _syncAll, onConnect: _connectGoogle)
                   .enter(0),
               const _LinkTelegram(),
+              const _LinkSlack(),
               for (final (gi, g) in order.indexed)
                 if (groups[g] != null) ...[
                   Padding(
@@ -303,6 +304,103 @@ class _LinkTelegramState extends ConsumerState<_LinkTelegram> {
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                       labelText: 'Telegram chat id', isDense: true),
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton(onPressed: _busy ? null : _link, child: const Text('Link')),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Link your Slack member id so Slack messages act on your account. Slack profile →
+/// ⋯ → Copy member ID (U0…), paste it here.
+class _LinkSlack extends ConsumerStatefulWidget {
+  const _LinkSlack();
+
+  @override
+  ConsumerState<_LinkSlack> createState() => _LinkSlackState();
+}
+
+class _LinkSlackState extends ConsumerState<_LinkSlack> {
+  final _id = TextEditingController();
+  bool _busy = false;
+  String? _linked;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(clientProvider).identities().then((rows) {
+      final sl = rows.where((r) => r['provider'] == 'slack');
+      if (sl.isNotEmpty && mounted) setState(() => _linked = sl.first['subject'] as String?);
+    }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _id.dispose();
+    super.dispose();
+  }
+
+  Future<void> _link() async {
+    final id = _id.text.trim();
+    if (id.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(clientProvider).linkIdentity('slack', id);
+      if (mounted) {
+        setState(() {
+          _linked = id;
+          _id.clear();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Slack linked — a deadline you post now becomes a task')));
+      }
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.tag, color: JarvisColors.sky),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text('Slack messages → tasks',
+                    style: Theme.of(context).textTheme.titleMedium)),
+            if (_linked != null)
+              const Chip(
+                avatar: Icon(Icons.check, size: 16, color: JarvisColors.success),
+                label: Text('Linked'),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          if (_linked != null)
+            Text('Member $_linked is linked. Post "the report is due Friday 5pm" in a '
+                'channel the bot is in — it becomes a deadline in Goals.',
+                style: Theme.of(context).textTheme.bodySmall)
+          else ...[
+            Text('Slack profile → ⋯ → Copy member ID (starts with U0…), paste it here. '
+                'The bot must be in the channel (channel → Integrations → Add apps).',
+                style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _id,
+                  decoration: const InputDecoration(
+                      labelText: 'Slack member id (U0…)', isDense: true),
                 ),
               ),
               const SizedBox(width: 10),

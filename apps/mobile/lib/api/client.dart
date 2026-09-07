@@ -62,9 +62,13 @@ class JarvisClient {
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
 
+  // A client built during startup (before restore) may have a null instance token;
+  // always fall back to the process-wide holder so a request is never anonymous.
+  String? get _token => _accessToken ?? SessionTokens.access;
+
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
+        if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
   Future<dynamic> _send(
@@ -82,7 +86,9 @@ class JarvisClient {
     final streamed = await _http.send(request);
     final response = await http.Response.fromStream(streamed);
 
-    if (response.statusCode == 401 && retryOnUnauthorized && _refreshToken != null) {
+    if (response.statusCode == 401 &&
+        retryOnUnauthorized &&
+        (_refreshToken ?? SessionTokens.refresh) != null) {
       if (await refresh()) {
         return _send(method, path,
             body: body,
@@ -160,10 +166,11 @@ class JarvisClient {
           retryOnUnauthorized: false) as Map<String, dynamic>;
 
   Future<bool> refresh() async {
-    if (_refreshToken == null) return false;
+    final token = _refreshToken ?? SessionTokens.refresh;
+    if (token == null) return false;
     try {
       final data = await _send('POST', '/v1/auth/refresh',
-          body: {'refresh_token': _refreshToken},
+          body: {'refresh_token': token},
           retryOnUnauthorized: false) as Map<String, dynamic>;
       setTokens(data['access_token'] as String, data['refresh_token'] as String);
       return true;
