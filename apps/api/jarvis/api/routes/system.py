@@ -277,13 +277,10 @@ async def run_checks(session, user_id) -> list[dict[str, Any]]:  # noqa: ANN001
         )
     checks.append(
         _check(
-            "Wake word key",
-            None if not s.picovoice_access_key else True,
-            "Picovoice key set"
-            if s.picovoice_access_key
-            else "no Picovoice key — Always listening cannot start",
+            "Wake word",
+            True,
+            'free and on-device — say "Jarvis" (no key needed)',
             group="devices",
-            action=None if s.picovoice_access_key else "settings",
         )
     )
 

@@ -207,10 +207,8 @@ class Settings(BaseSettings):
     )
     fcm_sender_id: str = Field(default="", description="Firebase messaging sender id (client)")
 
-    # ── always-on wake word on the phone ───────────────────────────────
-    # Picovoice Porcupine runs on-device; the AccessKey (free for personal use at
-    # console.picovoice.ai) only licenses the model. Fetched by the app after sign-in.
-    picovoice_access_key: str = Field(default="", description="Picovoice AccessKey for 'Jarvis'")
+    # The always-on wake word on the phone is free and on-device (the platform
+    # speech recogniser watches for "Jarvis"); the Mac node uses openWakeWord. No key.
 
     # ── device signing (blueprint §12) ─────────────────────────────────
     # PEM of the server's ECDSA private key. Generated per-process in local/test only;

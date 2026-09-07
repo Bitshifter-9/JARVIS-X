@@ -5,22 +5,34 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:porcupine_flutter/porcupine_error.dart';
-import 'package:porcupine_flutter/porcupine_manager.dart';
-import 'package:porcupine_flutter/porcupine.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../state/providers.dart';
 import 'speaker.dart';
 
-/// "Hey Jarvis" with the screen off — Android.
+/// "Hey Jarvis" with the screen off — Android, and **free**: no cloud wake service and
+/// no Picovoice AccessKey.
 ///
 /// A foreground service of type *microphone* keeps the process alive and the mic
-/// permitted; Porcupine listens on-device for the single word "Jarvis" (it does not
-/// transcribe the room); on a hit it hands the mic to speech recognition for one
-/// utterance, asks the same `/v1/chat` the app uses, and speaks the reply. Nothing is
-/// sent anywhere until the wake word fires, and the wake model never leaves the phone.
+/// permitted. We listen on-device with the platform recogniser (the same free
+/// `speech_to_text` the mic button uses) and watch the transcript for the word
+/// "jarvis". The audio is transcribed on the phone by the OS recogniser and never
+/// leaves it until the wake word fires; on a hit we take whatever the user said after
+/// "jarvis" as the command (or listen once more if they only said the name), ask the
+/// same `/v1/chat` the app uses, and speak the reply.
+///
+/// This trades a little battery for zero cost and zero setup versus a dedicated wake
+/// model. The Mac node already runs the neural wake word (openWakeWord's `hey_jarvis`);
+/// a Flutter port of that is the upgrade path if battery becomes a concern.
 enum WakePhase { off, armed, listening, thinking, speaking, error }
+
+/// The command that follows the wake word in [heard], or null if "jarvis" is not
+/// present. "jarvis what's next" → "what's next"; "jarvis" → "". Pure, so it is tested.
+String? commandAfterWake(String heard) {
+  final m = RegExp(r'\bjarvis\b[\s,.:;!?-]*', caseSensitive: false).firstMatch(heard);
+  if (m == null) return null;
+  return heard.substring(m.end).trim();
+}
 
 class WakeState {
   const WakeState({this.phase = WakePhase.off, this.lastHeard, this.lastReply, this.error});
@@ -58,27 +70,27 @@ class WakeController extends StateNotifier<WakeState> {
   WakeController(this._ref) : super(const WakeState());
 
   final Ref _ref;
-  PorcupineManager? _porcupine;
   final _stt = SpeechToText();
   Speaker? _speaker;
   final _history = <Map<String, String>>[];
+  bool _armed = false; // keep re-listening for the wake word
+  bool _handling = false; // a wake hit is being handled; ignore the recogniser
 
   static bool get supported => !kIsWeb && Platform.isAndroid;
 
-  Future<void> start({required String accessKey}) async {
+  Future<void> start() async {
     if (!supported) {
       state = state.copyWith(phase: WakePhase.error, error: 'Always-on listening is Android only');
       return;
     }
-    if (accessKey.isEmpty) {
-      state = state.copyWith(
-          phase: WakePhase.error,
-          error: 'Add a Picovoice AccessKey in Settings (free at console.picovoice.ai)');
-      return;
-    }
     try {
-      // Microphone permission, via the recogniser's own prompt.
-      final ok = await _stt.initialize();
+      final ok = await _stt.initialize(
+        onStatus: _onSttStatus,
+        onError: (_) {
+          // Recogniser errors (no match, network hiccup) are normal in a long listen;
+          // the status handler restarts us. Nothing to surface.
+        },
+      );
       if (!ok) throw StateError('microphone permission was refused');
 
       FlutterForegroundTask.init(
@@ -104,19 +116,13 @@ class WakeController extends StateNotifier<WakeState> {
         callback: wakeServiceEntry,
       );
 
-      _porcupine = await PorcupineManager.fromBuiltInKeywords(
-        accessKey,
-        [BuiltInKeyword.JARVIS],
-        _onWake,
-        errorCallback: (PorcupineException e) =>
-            state = state.copyWith(phase: WakePhase.error, error: e.message),
-      );
-      await _porcupine!.start();
       _speaker = Speaker(_ref.read(clientProvider))
         ..onSpeaking = (s) {
           if (s) state = state.copyWith(phase: WakePhase.speaking);
         };
+      _armed = true;
       state = const WakeState(phase: WakePhase.armed);
+      await _listenForWake();
     } catch (e) {
       await stop();
       state = state.copyWith(phase: WakePhase.error, error: '$e');
@@ -124,12 +130,10 @@ class WakeController extends StateNotifier<WakeState> {
   }
 
   Future<void> stop() async {
+    _armed = false;
     try {
-      await _porcupine?.stop();
-      await _porcupine?.delete();
+      await _stt.stop();
     } catch (_) {}
-    _porcupine = null;
-    await _stt.stop();
     _speaker?.dispose();
     _speaker = null;
     if (supported && await FlutterForegroundTask.isRunningService) {
@@ -138,18 +142,56 @@ class WakeController extends StateNotifier<WakeState> {
     state = const WakeState();
   }
 
-  Future<void> _onWake(int keywordIndex) async {
-    if (state.phase != WakePhase.armed) return;
-    // Porcupine and the recogniser cannot share the microphone; hand it over.
-    await _porcupine?.stop();
+  /// The recogniser stops itself on silence; while armed and idle, start it again so
+  /// listening is effectively continuous.
+  void _onSttStatus(String status) {
+    if (!_armed || _handling) return;
+    if (status == 'done' || status == 'notListening') {
+      scheduleMicrotask(() {
+        if (_armed && !_handling && !_stt.isListening) _listenForWake();
+      });
+    }
+  }
+
+  Future<void> _listenForWake() async {
+    if (!_armed || _handling || _stt.isListening) return;
+    try {
+      await _stt.listen(
+        onResult: (r) {
+          if (_handling) return;
+          if (commandAfterWake(r.recognizedWords) != null) {
+            _onWake(r.recognizedWords);
+          }
+        },
+        listenOptions: SpeechListenOptions(
+          listenMode: ListenMode.dictation,
+          partialResults: true,
+          cancelOnError: false,
+          listenFor: const Duration(minutes: 4),
+          pauseFor: const Duration(seconds: 6),
+        ),
+      );
+    } catch (_) {
+      // Retry on the next status callback.
+    }
+  }
+
+  Future<void> _onWake(String heard) async {
+    if (_handling) return;
+    _handling = true;
+    await _stt.stop();
     HapticFeedback.lightImpact();
     SystemSound.play(SystemSoundType.click);
-    state = state.copyWith(phase: WakePhase.listening);
     try {
-      final heard = await _listenOnce();
-      if (heard.isEmpty) return;
-      state = state.copyWith(phase: WakePhase.thinking, lastHeard: heard);
-      _history.add({'role': 'user', 'content': heard});
+      // If they said "jarvis, <command>" in one breath, use the tail; otherwise listen.
+      var command = commandAfterWake(heard) ?? '';
+      if (command.isEmpty) {
+        state = state.copyWith(phase: WakePhase.listening);
+        command = await _listenOnce();
+      }
+      if (command.isEmpty) return;
+      state = state.copyWith(phase: WakePhase.thinking, lastHeard: command);
+      _history.add({'role': 'user', 'content': command});
       final reply = await _ref.read(clientProvider).chat(
             _history.length <= 10 ? _history : _history.sublist(_history.length - 10),
           );
@@ -161,11 +203,10 @@ class WakeController extends StateNotifier<WakeState> {
       await _speaker?.say('Sorry, that did not work.');
       state = state.copyWith(error: '$e');
     } finally {
-      try {
-        await _porcupine?.start();
+      _handling = false;
+      if (_armed) {
         state = state.copyWith(phase: WakePhase.armed);
-      } catch (e) {
-        state = state.copyWith(phase: WakePhase.error, error: '$e');
+        await _listenForWake();
       }
     }
   }

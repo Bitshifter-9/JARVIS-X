@@ -209,15 +209,6 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
     super.dispose();
   }
 
-  dynamic _fieldValue(String name) {
-    for (final f in widget.fields) {
-      if (f['name'] == name) {
-        return _controllers[name]?.text ?? f['value'];
-      }
-    }
-    return null;
-  }
-
   Map<String, List<Map<String, dynamic>>> get _sections {
     final out = <String, List<Map<String, dynamic>>>{};
     for (final f in widget.fields) {
@@ -244,7 +235,7 @@ class _SettingsFormState extends ConsumerState<_SettingsForm> {
         const SizedBox(height: 16),
         const _Appearance(),
         const SizedBox(height: 8),
-        _AlwaysListening(accessKey: '${_fieldValue('picovoice_access_key') ?? ''}'),
+        const _AlwaysListening(),
         const SizedBox(height: 8),
         const _Memories(),
         const SizedBox(height: 8),
@@ -419,12 +410,10 @@ class _Appearance extends ConsumerWidget {
   }
 }
 
-/// "Hey Jarvis" with the screen off (Android). Needs the Picovoice AccessKey from the
-/// configuration list below; the wake word itself never leaves the phone.
+/// "Hey Jarvis" with the screen off (Android). Free and on-device — no key to set up;
+/// the audio is transcribed on the phone and never leaves it until the wake word fires.
 class _AlwaysListening extends ConsumerWidget {
-  const _AlwaysListening({required this.accessKey});
-
-  final String accessKey;
+  const _AlwaysListening();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -453,17 +442,9 @@ class _AlwaysListening extends ConsumerWidget {
           onChanged: !supported
               ? null
               : (v) => v
-                  ? ref.read(wakeProvider.notifier).start(accessKey: accessKey.trim())
+                  ? ref.read(wakeProvider.notifier).start()
                   : ref.read(wakeProvider.notifier).stop(),
         ),
-        if (supported && accessKey.trim().isEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: _InlineKey(
-              label: 'Picovoice AccessKey (free at console.picovoice.ai)',
-              field: 'picovoice_access_key',
-            ),
-          ),
         if (wake.lastHeard != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -476,61 +457,6 @@ class _AlwaysListening extends ConsumerWidget {
       ]),
     );
   }
-}
-
-/// A single setting, saved on its own — for the one key a feature cannot start without.
-class _InlineKey extends ConsumerStatefulWidget {
-  const _InlineKey({required this.label, required this.field});
-
-  final String label;
-  final String field;
-
-  @override
-  ConsumerState<_InlineKey> createState() => _InlineKeyState();
-}
-
-class _InlineKeyState extends ConsumerState<_InlineKey> {
-  final _controller = TextEditingController();
-  bool _busy = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            obscureText: true,
-            decoration: InputDecoration(labelText: widget.label, isDense: true),
-          ),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          onPressed: _busy || _controller.text.trim().isEmpty && false
-              ? null
-              : () async {
-                  final value = _controller.text.trim();
-                  if (value.isEmpty) return;
-                  setState(() => _busy = true);
-                  try {
-                    await ref.read(clientProvider).updateSettings({widget.field: value});
-                    ref.invalidate(settingsProvider);
-                  } on ProblemException catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(this.context)
-                          .showSnackBar(SnackBar(content: Text('$e')));
-                    }
-                  } finally {
-                    if (mounted) setState(() => _busy = false);
-                  }
-                },
-          child: Text(_busy ? '…' : 'Save'),
-        ),
-      ]);
 }
 
 /// What Jarvis remembers about you — and a way to make it forget.

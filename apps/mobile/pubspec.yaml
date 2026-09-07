@@ -25,7 +25,6 @@ dependencies:
   audioplayers: ^6.8.1
   flutter_animate: ^4.5.2
   google_fonts: ^8.2.1
-  porcupine_flutter: ^4.0.0
   flutter_foreground_task: ^11.0.2
   gpt_markdown: ^1.2.1
   image_picker: ^1.2.3
