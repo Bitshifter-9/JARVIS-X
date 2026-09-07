@@ -569,6 +569,19 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> anomalies() async =>
       (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  // ── commitment tracking (second-brain #22) ────────────────────────
+  Future<List<Map<String, dynamic>>> commitments() async =>
+      (await _send('GET', '/v1/commitments') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  Future<Map<String, dynamic>> scanCommitments() async =>
+      await _send('POST', '/v1/commitments/scan') as Map<String, dynamic>;
+
+  Future<void> commitmentDone(String id) async =>
+      _send('POST', '/v1/commitments/$id/done');
+
+  Future<void> commitmentDrop(String id) async =>
+      _send('POST', '/v1/commitments/$id/drop');
+
   /// Quick-capture a thought: filed as a deadline if dated, else a memory (#9).
   Future<Map<String, dynamic>> capture(String text) async =>
       await _send('POST', '/v1/capture', body: {'text': text}) as Map<String, dynamic>;

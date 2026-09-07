@@ -200,7 +200,20 @@ async def tick(session: AsyncSession) -> dict[str, Any]:
         report["insights"] = await derive_insights_all(session, accounts)
     except Exception as exc:  # noqa: BLE001
         log.error("connector_sync_failed", provider="insights", error=str(exc)[:300])
+    try:
+        report["commitments"] = await scan_commitments_all(session, accounts)
+    except Exception as exc:  # noqa: BLE001
+        log.error("connector_sync_failed", provider="commitments", error=str(exc)[:300])
     return report
+
+
+async def scan_commitments_all(session: AsyncSession, accounts: list[SourceAccount]) -> int:
+    from jarvis.services.commitment import scan_commitments
+
+    total = 0
+    for uid in {a.user_id for a in accounts}:
+        total += await scan_commitments(session, uid)
+    return total
 
 
 async def derive_insights_all(session: AsyncSession, accounts: list[SourceAccount]) -> int:

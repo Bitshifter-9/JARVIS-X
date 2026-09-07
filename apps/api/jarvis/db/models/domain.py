@@ -153,3 +153,24 @@ class GoalPrediction(UUIDPrimaryKey, Timestamps, Base):
     options: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     # The sentence a human reads. Generated from these numbers, never hardcoded.
     explanation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class Commitment(UUIDPrimaryKey, Timestamps, Base):
+    """A promise the user made — "I'll send it Friday", "I need to call the bank" — caught
+    from their own words so they keep their word (second-brain #22). Optionally dated; the
+    source is where it was said.
+    """
+
+    __tablename__ = "commitments"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source: Mapped[str] = mapped_column(String(24), nullable=False, default="chat")
+    # A stable fingerprint of the sentence, so the same promise isn't caught twice.
+    dedupe_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # open | done | dropped
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

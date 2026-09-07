@@ -79,7 +79,7 @@ LLM router cascade with a local Ollama fallback.
 
 21. ⬜ **Spaced-repetition resurfacing.** Important notes/decisions resurface on a forgetting
     curve, so what you learned once doesn't evaporate.
-22. ⬜ **Commitment tracking.** "I'll send it Friday," "let's do coffee next week" — extracted
+22. ✅ **Commitment tracking.** "I'll send it Friday," "let's do coffee next week" — extracted
     from your messages and tracked to done, so you keep your word.
 23. ⬜ **Instant contextual recall.** "What did I decide about the API?" → answered from
     everything captured, each claim with a source (GraphRAG over your life).

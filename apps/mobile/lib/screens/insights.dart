@@ -22,6 +22,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _travel = const [];
   List<Map<String, dynamic>> _grouped = const [];
   List<Map<String, dynamic>> _anomalies = const [];
+  List<Map<String, dynamic>> _commitments = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -49,6 +50,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.meetingPrep(),
         client.groupedActivity(),
         client.anomalies(),
+        client.commitments(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -60,6 +62,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _meeting = results[5] as Map<String, dynamic>?;
         _grouped = results[6] as List<Map<String, dynamic>>;
         _anomalies = results[7] as List<Map<String, dynamic>>;
+        _commitments = results[8] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -113,6 +116,19 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
+                      if (_commitments.isNotEmpty)
+                        _CommitmentsCard(
+                          commitments: _commitments,
+                          onDone: (id) async {
+                            await ref.read(clientProvider).commitmentDone(id);
+                            _load();
+                          },
+                          onDrop: (id) async {
+                            await ref.read(clientProvider).commitmentDrop(id);
+                            _load();
+                          },
+                        ),
+                      if (_commitments.isNotEmpty) const SizedBox(height: 8),
                       if (_anomalies.isNotEmpty) _AnomalyCard(nudges: _anomalies),
                       if (_anomalies.isNotEmpty) const SizedBox(height: 8),
                       if (_meeting != null) _MeetingCard(meeting: _meeting!),
@@ -419,5 +435,67 @@ class _GroupedCard extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+/// Promises you made, caught from your own words (second-brain #22). Tick when kept.
+class _CommitmentsCard extends StatelessWidget {
+  const _CommitmentsCard(
+      {required this.commitments, required this.onDone, required this.onDrop});
+
+  final List<Map<String, dynamic>> commitments;
+  final Future<void> Function(String id) onDone;
+  final Future<void> Function(String id) onDrop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.handshake_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Promises you made', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 4),
+          for (final c in commitments)
+            Dismissible(
+              key: ValueKey(c['id']),
+              direction: DismissDirection.endToStart,
+              onDismissed: (_) => onDrop(c['id'] as String),
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 16),
+                child: const Icon(Icons.delete_outline),
+              ),
+              child: ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: IconButton(
+                  tooltip: 'Kept it',
+                  icon: const Icon(Icons.check_circle_outline),
+                  onPressed: () => onDone(c['id'] as String),
+                ),
+                title: Text(c['text'] as String? ?? '',
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: c['due'] != null
+                    ? Text('by ${_due(c['due'] as String)}',
+                        style: Theme.of(context).textTheme.bodySmall)
+                    : null,
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  static String _due(String iso) {
+    final d = DateTime.tryParse(iso)?.toLocal();
+    if (d == null) return iso;
+    return '${const [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ][d.month - 1]} ${d.day}';
   }
 }
