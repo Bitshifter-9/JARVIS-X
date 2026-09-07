@@ -537,6 +537,13 @@ class JarvisClient {
   Future<Map<String, dynamic>> awayDigest({int hours = 24}) async =>
       await _send('GET', '/v1/insights/away?hours=$hours') as Map<String, dynamic>;
 
+  // ── proactivity: streaks and meeting prep ─────────────────────────
+  Future<Map<String, dynamic>> streaks() async =>
+      await _send('GET', '/v1/proactivity/streaks') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>?> meetingPrep() async =>
+      await _send('GET', '/v1/proactivity/meeting') as Map<String, dynamic>?;
+
   Future<Map<String, dynamic>> wipeAccount() async =>
       await _send('POST', '/v1/account/wipe', query: {'confirm': 'DELETE'})
           as Map<String, dynamic>;

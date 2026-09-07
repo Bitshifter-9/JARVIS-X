@@ -34,6 +34,7 @@ from jarvis.api.routes import (
     oauth,
     permissions,
     personas,
+    proactivity,
     profile,
     routines,
     runs,
@@ -171,6 +172,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router)
     app.include_router(personas.router)
     app.include_router(insights.router)
+    app.include_router(proactivity.router)
     app.include_router(permissions.router)
 
     return app

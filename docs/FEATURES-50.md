@@ -42,12 +42,12 @@ shippable on its own; the batches below are the order of work.
 ## D. Proactivity & intelligence
 31. ⬜ Smart notification grouping & summaries
 32. ✅ "What changed while I was away" digest
-33. ⬜ Meeting prep card (pulls docs/people before a calendar event)
+33. ✅ Meeting prep card (pulls docs/people before a calendar event)
 34. ✅ Weekly review with trends (done vs slipped over weeks)
 35. ⬜ GraphRAG multi-hop answers over the knowledge graph
 36. ✅ Spending / bills tracker from payment mails
 37. ✅ Travel card (flights/hotels from mail, with reminders)
-38. ⬜ Habit streaks (focus sessions, briefings read)
+38. ✅ Habit streaks (focus sessions, briefings read)
 39. ⬜ Anomaly nudges ("you usually reply to X within an hour")
 40. ✅ Auto-label mail into projects
 

@@ -17,6 +17,8 @@ class InsightsScreen extends ConsumerStatefulWidget {
 class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Map<String, dynamic>? _spending;
   Map<String, dynamic>? _away;
+  Map<String, dynamic>? _streaks;
+  Map<String, dynamic>? _meeting;
   List<Map<String, dynamic>> _travel = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -41,6 +43,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.travel(),
         client.insightLabels(),
         client.awayDigest(),
+        client.streaks(),
+        client.meetingPrep(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -48,6 +52,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _travel = results[1] as List<Map<String, dynamic>>;
         _labels = results[2] as Map<String, dynamic>;
         _away = results[3] as Map<String, dynamic>;
+        _streaks = results[4] as Map<String, dynamic>?;
+        _meeting = results[5] as Map<String, dynamic>?;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -101,6 +107,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
+                      if (_meeting != null) _MeetingCard(meeting: _meeting!),
+                      if (_meeting != null) const SizedBox(height: 8),
+                      _StreaksCard(streaks: _streaks),
+                      const SizedBox(height: 8),
                       _AwayCard(away: _away),
                       const SizedBox(height: 8),
                       _SpendingCard(spending: _spending),
@@ -247,5 +257,98 @@ class _LabelsCard extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+class _MeetingCard extends StatelessWidget {
+  const _MeetingCard({required this.meeting});
+  final Map<String, dynamic> meeting;
+
+  @override
+  Widget build(BuildContext context) {
+    final mail = (meeting['related_mail'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final deadlines =
+        (meeting['nearby_deadlines'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final when = meeting['when'] != null
+        ? DateTime.tryParse(meeting['when'] as String)?.toLocal()
+        : null;
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.event_note, size: 20),
+            const SizedBox(width: 8),
+            Text('Next up', style: Theme.of(context).textTheme.labelLarge),
+          ]),
+          const SizedBox(height: 6),
+          Text(meeting['title'] as String? ?? 'Meeting',
+              style: Theme.of(context).textTheme.titleMedium),
+          if (when != null)
+            Text(
+              '${_weekday(when)} ${when.hour.toString().padLeft(2, '0')}:'
+              '${when.minute.toString().padLeft(2, '0')}'
+              '${meeting['organizer'] != null ? ' · ${meeting['organizer']}' : ''}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          if (mail.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Recent mail', style: Theme.of(context).textTheme.labelMedium),
+            for (final m in mail.take(3))
+              Text('• ${m['subject'] ?? ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall),
+          ],
+          if (deadlines.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Around then', style: Theme.of(context).textTheme.labelMedium),
+            for (final d in deadlines)
+              Text('• ${d['title'] ?? ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  static String _weekday(DateTime d) =>
+      const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
+}
+
+class _StreaksCard extends StatelessWidget {
+  const _StreaksCard({required this.streaks});
+  final Map<String, dynamic>? streaks;
+
+  @override
+  Widget build(BuildContext context) {
+    final focus = (streaks?['focus'] as Map<String, dynamic>? ?? const {});
+    final done = (streaks?['done'] as Map<String, dynamic>? ?? const {});
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Streaks', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _streak(context, '🔥', 'Focus days', focus)),
+            Expanded(child: _streak(context, '✅', 'Done days', done)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _streak(BuildContext context, String emoji, String label, Map<String, dynamic> s) {
+    final current = s['current'] as int? ?? 0;
+    final longest = s['longest'] as int? ?? 0;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('$emoji $current day${current == 1 ? '' : 's'}',
+          style: Theme.of(context).textTheme.titleLarge),
+      Text('$label · best $longest', style: Theme.of(context).textTheme.bodySmall),
+    ]);
   }
 }
