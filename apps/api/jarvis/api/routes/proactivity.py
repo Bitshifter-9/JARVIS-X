@@ -13,6 +13,7 @@ from jarvis.services.proactivity import (
     habit_streaks,
     meeting_prep,
     owed_replies,
+    what_mattered,
 )
 
 router = APIRouter(prefix="/v1/proactivity", tags=["proactivity"])
@@ -43,3 +44,11 @@ async def owed(
 ) -> list[dict[str, Any]]:
     """Dropped-thread finder (#28): people who asked you something you may owe a reply."""
     return await owed_replies(session, user.id, limit=limit)
+
+
+@router.get("/digest")
+async def digest(
+    user: CurrentUser, session: SessionDep, limit: int = 5
+) -> list[dict[str, Any]]:
+    """"What mattered" (#25): the few things that need you now, ranked — for the home glance."""
+    return await what_mattered(session, user.id, limit=limit)

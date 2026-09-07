@@ -58,6 +58,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   but have gone quiet on, from the rhythm of your correspondence (deterministic, no model).
 - ✅ **#17 Interest drift** — a "Where your head is" card shows topics rising and fading in your
   own words (recent vs baseline), so briefings track the current you (deterministic, no model).
+- ✅ **#25 "What matters now"** — a single ranked glance on the home dashboard that composes the
+  urgent deadlines, promises due, replies owed and gone-quiet people into the few things to act on.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -141,8 +143,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     re-ranking is the later optimisation.)
 24. ✅ **About-to-forget reminders.** Surfaces the thing *just before* you need it — the name
     before the meeting, the gift before the birthday, the promise before you see them.
-25. ⬜ **"What mattered" digest.** Auto daily/weekly rollup of the few things that mattered
-    (extends the away-digest already shipped).
+25. ✅ **"What mattered" digest.** The few things that actually need you now, ranked into a
+    single "What matters now" glance on the home dashboard — composes deadlines/promises due,
+    replies owed, and who you've gone quiet on. Deterministic, no model; tap a row to jump there.
 26. ✅ **One search box over your whole life.** Mail, chats, screens, notes, media — one
     semantic search, ranked, with time and source.
 27. ⬜ **Rediscover.** Surfaces an old idea/note relevant to what you're doing *right now* —

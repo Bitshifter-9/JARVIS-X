@@ -125,3 +125,26 @@ async def test_owed_replies_finds_unanswered_and_skips_muted(session, user):
     assert len(owed) == 1
     assert "sam@x.com" in senders[0]
     assert owed[0]["subject"] == "still waiting"
+
+
+async def test_what_mattered_ranks_urgent_first(session, user):
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.services.goal import GoalService
+    from jarvis.services.proactivity import what_mattered
+
+    now = datetime.now(UTC)
+    await GoalService(session).create_task(
+        user.id, title="Overdue thing", due_at=now - timedelta(hours=2), timezone="UTC"
+    )
+    await GoalService(session).create_task(
+        user.id, title="Due later today", due_at=now + timedelta(hours=6), timezone="UTC"
+    )
+    await session.flush()
+
+    digest = await what_mattered(session, user.id)
+    texts = [d["text"] for d in digest]
+    assert "Overdue thing" in texts and "Due later today" in texts
+    # Overdue outranks merely-soon.
+    assert texts.index("Overdue thing") < texts.index("Due later today")
+    assert digest[0]["reason"] == "overdue"

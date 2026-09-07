@@ -17,6 +17,39 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def what_mattered(
+    session: AsyncSession, user_id: uuid.UUID, *, limit: int = 5
+) -> list[dict[str, Any]]:
+    """"What mattered" digest (#25): the few things that actually need you now, drawn from
+    across the signals and ranked — a one-glance summary for the home screen, not another
+    list. Composes deadlines/promises due, replies owed, and who you've gone quiet on. No
+    model, no new writes."""
+    from jarvis.services.relationships import relationships
+    from jarvis.services.triage import sender_name
+
+    items: list[dict[str, Any]] = []
+    for it in await coming_up(session, user_id, hours=24):
+        items.append({
+            "kind": it["type"], "text": it["text"],
+            "reason": "overdue" if it["overdue"] else "due soon",
+            "route": "goals", "score": 100 if it["overdue"] else 80,
+        })
+    for it in await owed_replies(session, user_id, limit=3):
+        items.append({
+            "kind": "reply", "text": sender_name(it["sender"]),
+            "reason": "waiting on your reply", "route": "insights", "score": 60,
+        })
+    quiet = [r for r in await relationships(session, user_id, limit=10) if r["quiet"]]
+    if quiet:
+        q = quiet[0]
+        items.append({
+            "kind": "reconnect", "text": q["name"],
+            "reason": f"quiet {q['days_since']}d", "route": "insights", "score": 40,
+        })
+    items.sort(key=lambda x: x["score"], reverse=True)
+    return items[:limit]
+
+
 async def coming_up(
     session: AsyncSession, user_id: uuid.UUID, *, hours: int = 48
 ) -> list[dict[str, Any]]:

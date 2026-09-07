@@ -354,6 +354,11 @@ final allTasksProvider = StreamProvider.autoDispose<List<Task>>(
       ),
 );
 
+/// "What matters now" — the ranked home-screen digest (#25).
+final digestProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) => ref.watch(clientProvider).digest(),
+);
+
 /// Senders/channels you disliked — the Muted section on Goals (#14).
 final reminderMutesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>(

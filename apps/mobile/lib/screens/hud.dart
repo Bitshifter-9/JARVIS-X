@@ -79,7 +79,10 @@ class _HudScreenState extends ConsumerState<HudScreen> {
     return AmbientBackground(
       intensity: _orb == OrbState.idle ? 0.7 : 1.2,
       child: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(hudProvider),
+        onRefresh: () async {
+          ref.invalidate(hudProvider);
+          ref.invalidate(digestProvider);
+        },
         child: hud.when(
           loading: () => const SkeletonList(rows: 5, height: 96),
           error: (e, _) => ErrorState(message: '$e', onRetry: () => ref.invalidate(hudProvider)),
@@ -97,11 +100,16 @@ class _HudScreenState extends ConsumerState<HudScreen> {
         .toList();
     final live = _ticker.map(_LiveLine.fromEvent).toList();
     final lines = [...live, ...recent.map(_LiveLine.fromTimeline)].take(14).toList();
+    final digest = ref.watch(digestProvider).valueOrNull ?? const [];
 
     final left = <Widget>[
       _Hero(greeting: body['greeting'] as String? ?? 'Hello.', orb: _orb).enter(0),
       const _OnboardingNudge(),
       const SizedBox(height: 12),
+      if (digest.isNotEmpty) ...[
+        _Panel(title: 'What matters now', child: _Digest(items: digest)).enter(0),
+        const SizedBox(height: 14),
+      ],
       const _AskBar().enter(0),
       const _FocusCard(),
       const SizedBox(height: 14),
@@ -776,5 +784,50 @@ class _FocusCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+/// "What matters now" (#25): the few things that actually need you, ranked — a one-glance
+/// digest that composes deadlines due, replies owed and who you've gone quiet on. Tapping a
+/// row jumps to where it lives.
+class _Digest extends ConsumerWidget {
+  const _Digest({required this.items});
+  final List<Map<String, dynamic>> items;
+
+  static const _route = {'goals': 3, 'insights': 10};
+  static const _icon = {
+    'deadline': Icons.event_outlined,
+    'commitment': Icons.handshake_outlined,
+    'reply': Icons.reply_outlined,
+    'reconnect': Icons.diversity_3_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(children: [
+      for (final it in items)
+        InkWell(
+          onTap: () {
+            final tab = _route[it['route']];
+            if (tab != null) ref.read(homeTabProvider.notifier).state = tab;
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(children: [
+              Icon(_icon[it['kind']] ?? Icons.bolt_outlined,
+                  size: 16,
+                  color: it['reason'] == 'overdue' ? JarvisColors.danger : scheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('${it['text']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Text('${it['reason']}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: it['reason'] == 'overdue' ? JarvisColors.danger : null)),
+            ]),
+          ),
+        ),
+    ]);
   }
 }

@@ -581,6 +581,11 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> relationships() async =>
       (await _send('GET', '/v1/relationships') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// "What matters now" digest: the few things that need you, ranked (#25).
+  Future<List<Map<String, dynamic>>> digest() async =>
+      (await _send('GET', '/v1/proactivity/digest') as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+
   /// Spaced-repetition: important things you'd forget, resurfaced on a curve (#21).
   Future<List<Map<String, dynamic>>> resurfacedMemories() async =>
       (await _send('GET', '/v1/memories/resurface') as List<dynamic>).cast<Map<String, dynamic>>();
