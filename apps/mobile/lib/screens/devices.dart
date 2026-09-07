@@ -490,6 +490,21 @@ class _PhoneCardState extends ConsumerState<_PhoneCard> {
               onPressed: () => mirrorDeviceScreen(context, ref, widget.device),
             ),
             ActionChip(
+              avatar: const Icon(Icons.skip_previous, size: 18),
+              label: const Text('Prev'),
+              onPressed: () => _run('phone.media', {'command': 'previous'}),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.play_arrow, size: 18),
+              label: const Text('Play/Pause'),
+              onPressed: () => _run('phone.media', {'command': 'playpause'}),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.skip_next, size: 18),
+              label: const Text('Next'),
+              onPressed: () => _run('phone.media', {'command': 'next'}),
+            ),
+            ActionChip(
               avatar: const Icon(Icons.notifications_active, size: 18),
               label: const Text('Ring'),
               onPressed: () => _run('phone.ring'),

@@ -228,6 +228,10 @@ RULES: dict[str, ToolRule] = {
             conditions=("device_is_paired_owner",), standing_permission_allowed=True,
         ),
         ToolRule(
+            "phone.media", Risk.R1, "Play, pause or skip media on the phone",
+            conditions=("device_is_paired_owner",), standing_permission_allowed=True,
+        ),
+        ToolRule(
             "phone.locate", Risk.R2, "Read the phone's current location and send it to you",
             conditions=("device_is_paired_owner",), standing_permission_allowed=True,
         ),
@@ -515,6 +519,9 @@ MANIFESTS: dict[str, ToolManifest] = {
         ),
         ToolManifest(
             "phone.torch", timeout_seconds=10, verify=("http_status",), requires_device=True
+        ),
+        ToolManifest(
+            "phone.media", timeout_seconds=10, verify=("http_status",), requires_device=True
         ),
         ToolManifest(
             "phone.locate", timeout_seconds=30, verify=("http_status",), requires_device=True

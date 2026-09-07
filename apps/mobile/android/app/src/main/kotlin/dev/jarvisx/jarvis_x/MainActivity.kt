@@ -92,6 +92,25 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        // Media remote (FEATURES-50 #28): dispatch a media key to the active session.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/media").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "key" -> {
+                    val code = when (call.argument<String>("command")) {
+                        "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                        "previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                        "play" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                        "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+                        else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                    }
+                    val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                    am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+                    am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
         // The activity sampler: foreground apps from UsageStatsManager (PLAN.md 10.6.3).
         UsageChannel.attach(this, MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/usage"))
         // The notification mirror: Dart polls what the listener queued (PLAN.md 10.4.4).

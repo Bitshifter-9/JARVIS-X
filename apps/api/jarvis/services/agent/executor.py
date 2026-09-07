@@ -439,11 +439,45 @@ class ToolExecutor:
             return {"error": f"no paired {'Mac' if platform == 'macos' else 'phone'}"}
         action.device_id = target.id
         await self.session.flush()
+        # FCM-woken execution (FEATURES-50 #21): the phone's socket drops when the app is
+        # backgrounded, so a job addressed to an offline phone would just wait. Nudge it
+        # with a push so the owner reopens the app, which reconnects and runs the job.
+        if not online and platform == "android":
+            await self._wake_offline_phone(action.user_id, target.name)
         return {
             "queued_for_device": str(target.id),
             "device_online": bool(online),
             "queued_at": datetime.now(UTC).isoformat(),
         }
+
+    async def _wake_offline_phone(self, user_id: uuid.UUID, device_name: str) -> None:
+        s = get_settings()
+        if not s.fcm_credentials_path:
+            return
+        from jarvis.connectors.fcm import FcmSender
+        from jarvis.db.models.ops import NotificationEndpoint
+
+        tokens = (
+            await self.session.scalars(
+                select(NotificationEndpoint.address).where(
+                    NotificationEndpoint.user_id == user_id,
+                    NotificationEndpoint.channel == "push",
+                    NotificationEndpoint.enabled.is_(True),
+                )
+            )
+        ).all()
+        if not tokens:
+            return
+        sender = FcmSender(s.fcm_credentials_path, s.fcm_project_id)
+        for token in tokens:
+            try:
+                await sender.send(
+                    token,
+                    title="JARVIS needs your phone",
+                    body=f"Open the app to run a queued action on {device_name}.",
+                )
+            except Exception as exc:  # noqa: BLE001 — a wake is best-effort
+                log.warning("wake_push_failed", error=str(exc)[:120])
 
 
 def _simulated(action: Action) -> dict[str, Any]:

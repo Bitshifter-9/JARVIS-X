@@ -36,6 +36,7 @@ PhoneNode node(
   List<String>? opened,
   List<String>? launched,
   List<String>? intents,
+  List<String>? media,
 }) {
   final n = PhoneNode(
     launchUrl: (uri) async {
@@ -49,6 +50,10 @@ PhoneNode node(
     notify: (_, __) async {},
     launchIntent: (action) async {
       intents?.add(action);
+      return true;
+    },
+    media: (command) async {
+      media?.add(command);
       return true;
     },
   );
@@ -108,6 +113,18 @@ void main() {
         DeviceKey.verify(n.publicPem, canonicalBytes(unsigned), result['signature'] as String),
         isTrue,
       );
+    });
+
+    test('a media key job dispatches the command (FEATURES-50 #28)', () async {
+      final server = DeviceKey.generate();
+      final media = <String>[];
+      final n = node(server, media: media);
+
+      final result = await n.execute(
+        signedJob(server, action: 'phone.media', args: const {'command': 'next'}),
+      );
+      expect(result['status'], 'completed');
+      expect(media, ['next']);
     });
 
     test('a job signed by someone other than the server is refused before it runs',

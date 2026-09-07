@@ -44,6 +44,7 @@ class PhoneNode {
     Future<bool> Function(String phone, String text)? whatsappSend,
     Future<Map<String, dynamic>> Function()? systemInfo,
     Future<bool> Function(bool on)? torch,
+    Future<bool> Function(String command)? media,
     this.macHands,
     WebSocketChannel Function(Uri)? connect,
   })  : launchIntent = launchIntent ?? ((_) async => false),
@@ -53,6 +54,7 @@ class PhoneNode {
         whatsappSend = whatsappSend ?? ((_, __) async => false),
         systemInfo = systemInfo ?? (() async => <String, dynamic>{}),
         torch = torch ?? ((_) async => false),
+        media = media ?? ((_) async => false),
         captureImage = captureImage ?? (() async => null),
         uploadArtifact = uploadArtifact ?? ((_, __, ___) async => null),
         readClipboard = readClipboard ?? (() async => null),
@@ -76,6 +78,7 @@ class PhoneNode {
   final Future<Map<String, dynamic>> Function() systemInfo;
   /// The flashlight.
   final Future<bool> Function(bool on) torch;
+  final Future<bool> Function(String command) media;
   /// One photo, taken by the user through the system camera — never a live feed.
   final Future<List<int>?> Function() captureImage;
   final Future<String?> Function(String kind, String filename, List<int> bytes) uploadArtifact;
@@ -97,6 +100,7 @@ class PhoneNode {
     'phone.camera',
     'phone.clipboard_read',
     'phone.clipboard_write',
+    'phone.media',
   };
 
   /// What this node answers: the phone verbs, plus the Mac verbs when it is a Mac.
@@ -431,6 +435,8 @@ class PhoneNode {
         return {'status': await ring() ? 200 : 500};
       case 'phone.system_info':
         return {'status': 200, ...await systemInfo()};
+      case 'phone.media':
+        return {'status': await media(args['command'] as String? ?? 'playpause') ? 200 : 500};
       case 'phone.torch':
         final on = args['on'] as bool? ?? true;
         return {'status': await torch(on) ? 200 : 500, 'on': on};

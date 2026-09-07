@@ -247,6 +247,7 @@ final phoneNodeProvider = ChangeNotifierProvider<PhoneNodeNotifier>((ref) {
     whatsappSend: platformWhatsappSend,
     systemInfo: platformSystemInfo,
     torch: platformTorch,
+    media: platformMedia,
     captureImage: platformCaptureImage,
     uploadArtifact: upload,
     readClipboard: platformReadClipboard,

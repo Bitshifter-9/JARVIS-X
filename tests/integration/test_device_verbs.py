@@ -45,9 +45,10 @@ def test_the_verbs_have_the_right_tier_and_evidence():
     assert manifest_for("phone.locate").verify == ("http_status",)
     assert rule_for("phone.system_info").risk.value == "R1"
     assert rule_for("phone.torch").risk.value == "R1"
+    assert rule_for("phone.media").risk.value == "R1"  # play/pause/skip is harmless
     for tool in (
         "phone.ring", "mac.ring", "phone.locate", "phone.call", "phone.whatsapp_send",
-        "phone.system_info", "phone.torch",
+        "phone.system_info", "phone.torch", "phone.media",
     ):
         assert manifest_for(tool) is not None
 
@@ -112,3 +113,34 @@ async def test_completing_a_locate_stores_the_last_location(client, session, use
     stored = await session.get(Device, phone.id)
     assert stored.last_location["lat"] == 12.97 and stored.last_location["lng"] == 77.59
     assert stored.last_location["at"]
+
+
+async def test_a_job_for_an_offline_phone_sends_a_wake_push(session, user, monkeypatch):
+    """FCM-woken execution (FEATURES-50 #21): a job addressed to a phone that isn't
+    connected nudges it with a push so the owner reopens the app to run it."""
+    from jarvis.connectors import fcm
+    from jarvis.core.config import get_settings
+    from jarvis.db.models.ops import NotificationEndpoint
+    from jarvis.services.agent.executor import ToolExecutor
+
+    sent: list[tuple[str, str]] = []
+
+    async def fake_send(self, address, *, title, body, task_id=None):  # noqa: ANN001
+        sent.append((address, title))
+        return {"ok": True}
+
+    monkeypatch.setattr(fcm.FcmSender, "send", fake_send)
+    monkeypatch.setattr(get_settings(), "fcm_credentials_path", "/x/fcm.json")
+
+    await _phone(session, user.id)  # paired, but never connects a socket → offline
+    session.add(
+        NotificationEndpoint(user_id=user.id, channel="push", address="tok123", enabled=True)
+    )
+    await session.commit()
+
+    proposal = await ToolGateway(session).propose(user.id, tool="phone.ring", args={})
+    await session.commit()
+    action = await ToolGateway(session).authorize_dispatch(proposal.action.id)
+    await ToolExecutor(session).run(action)
+
+    assert sent and sent[0][0] == "tok123"

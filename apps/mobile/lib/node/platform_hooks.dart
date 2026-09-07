@@ -167,3 +167,15 @@ Future<bool> platformTorch(bool on) async {
   // The torch needs a camera plugin; report unavailable rather than pretend.
   return false;
 }
+
+/// Media control (FEATURES-50 #28): dispatch a media key to whatever is playing.
+/// command: playpause | play | pause | next | previous.
+Future<bool> platformMedia(String command) async {
+  try {
+    return await const MethodChannel('jarvis/media')
+            .invokeMethod<bool>('key', {'command': command}) ??
+        false;
+  } catch (_) {
+    return false;
+  }
+}
