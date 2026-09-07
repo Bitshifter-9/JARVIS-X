@@ -86,7 +86,10 @@ TITLE_SCHEMA = {
     "properties": {"title": {"type": "string"}},
     "required": ["title"],
 }
-PROVIDERS = ("auto", "groq", "gemini", "openrouter_free", "openrouter_paid", "ollama")
+PROVIDERS = (
+    "auto", "gateway", "groq", "cerebras", "gemini", "openrouter_free",
+    "openrouter_free2", "openrouter_paid", "ollama",
+)
 
 
 def _persona(fragment: str = "") -> str:

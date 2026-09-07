@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from jarvis.api.deps import CurrentUser, SessionDep
 from jarvis.core.config import get_settings
@@ -156,3 +156,72 @@ async def wipe(user: CurrentUser, session: SessionDep, confirm: str = "") -> dic
     )
     await session.flush()
     return {"wiped": counts}
+
+
+@router.get("/review/weekly")
+async def weekly_review(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """The past 7 days at a glance (FEATURES-50 34): done, slipped, focus minutes,
+    where the time went, and what is due next week."""
+    from jarvis.db.models.domain import WorkSession
+    from jarvis.services import activity
+
+    now = datetime.now(UTC)
+    week_ago = now - timedelta(days=7)
+    zone = ZoneInfo(user.timezone or get_settings().timezone)
+
+    done = (
+        await session.scalars(
+            select(Task).where(
+                Task.user_id == user.id,
+                Task.completed_at >= week_ago,
+                Task.status == "done",
+            )
+        )
+    ).all()
+    slipped = (
+        await session.scalars(
+            select(Task).where(
+                Task.user_id == user.id,
+                Task.status.in_(("open", "in_progress")),
+                Task.due_at.is_not(None),
+                Task.due_at < now,
+                Task.due_at >= week_ago,
+            )
+        )
+    ).all()
+    upcoming = (
+        await session.scalars(
+            select(Task)
+            .where(
+                Task.user_id == user.id,
+                Task.status.in_(("open", "in_progress")),
+                Task.due_at >= now,
+                Task.due_at < now + timedelta(days=7),
+            )
+            .order_by(Task.due_at)
+        )
+    ).all()
+    focus_minutes = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(WorkSession.active_minutes), 0)).where(
+                WorkSession.user_id == user.id, WorkSession.started_at >= week_ago
+            )
+        )
+        or 0
+    )
+    screen = await activity.summary(session, user.id, week_ago, now)
+
+    return {
+        "from": week_ago.astimezone(zone).strftime("%a %d %b"),
+        "to": now.astimezone(zone).strftime("%a %d %b"),
+        "done": len(done),
+        "done_titles": [t.title for t in done[:10]],
+        "slipped": len(slipped),
+        "slipped_titles": [t.title for t in slipped[:10]],
+        "focus_hours": round(focus_minutes / 60, 1),
+        "top_apps": screen[:6],
+        "upcoming": [
+            {"title": t.title, "due": t.due_at.astimezone(zone).strftime("%a %d %b, %H:%M")}
+            for t in upcoming[:10]
+        ],
+    }

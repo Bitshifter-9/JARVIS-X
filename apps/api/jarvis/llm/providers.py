@@ -199,6 +199,41 @@ class OpenRouterPaidProvider(LiteLLMProvider):
         self.model = f"openrouter/{s.openrouter_paid_model}"
 
 
+class CerebrasProvider(LiteLLMProvider):
+    name = "cerebras"
+
+    def __init__(self) -> None:
+        s = get_settings()
+        self.api_key = s.cerebras_api_key
+        self.model = s.cerebras_model
+
+
+class OpenRouterFree2Provider(LiteLLMProvider):
+    name = "openrouter_free2"
+
+    def __init__(self) -> None:
+        s = get_settings()
+        self.api_key = s.openrouter_api_key
+        self.model = f"openrouter/{s.openrouter_free_model2}"
+
+
+class CustomGatewayProvider(LiteLLMProvider):
+    """Any OpenAI-compatible endpoint. Set gateway_base_url + gateway_api_key + model."""
+
+    name = "gateway"
+
+    def __init__(self) -> None:
+        s = get_settings()
+        self.api_key = s.gateway_api_key or "gateway"
+        self.model = f"openai/{s.gateway_model}"
+        self.is_paid = s.gateway_is_paid
+        self._base = s.gateway_base_url
+        self.extra_params = {"api_base": s.gateway_base_url} if s.gateway_base_url else {}
+
+    def is_configured(self) -> bool:
+        return bool(self._base)
+
+
 class OllamaProvider(LiteLLMProvider):
     name = "ollama"
     # Ollama's `format` parameter enforces a JSON schema server-side, and the router

@@ -85,22 +85,24 @@ async def slack_webhook(
     settings = get_settings()
     raw = await request.body()
 
-    if not verify_slack_signature(
-        settings.slack_signing_secret, timestamp=timestamp, body=raw, signature=signature
-    ):
-        log.warning("slack_webhook_bad_signature")
-        return Response(status_code=status.HTTP_200_OK)
-
     try:
         body: dict[str, Any] = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         log.warning("slack_webhook_unparseable_body")
         return Response(status_code=status.HTTP_200_OK)
 
-    # Slack proves it owns the endpoint by asking us to echo a challenge. Answered only
-    # after the signature check, so a stranger cannot use it as an oracle.
+    # The one-time ownership handshake is answered *before* the signature check: Slack
+    # sends it when you first save the Request URL (possibly before the signing secret
+    # is set on our side), and echoing a public challenge to an unsigned request leaks
+    # nothing and enables no action. Every real event below still needs a valid signature.
     if body.get("type") == "url_verification":
         return JSONResponse({"challenge": body.get("challenge", "")})
+
+    if not verify_slack_signature(
+        settings.slack_signing_secret, timestamp=timestamp, body=raw, signature=signature
+    ):
+        log.warning("slack_webhook_bad_signature")
+        return Response(status_code=status.HTTP_200_OK)
 
     from jarvis.db.session import session_scope
 

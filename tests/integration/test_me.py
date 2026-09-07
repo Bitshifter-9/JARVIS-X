@@ -84,3 +84,30 @@ async def test_wipe_needs_confirmation_and_clears_content(client, auth, session,
     assert remaining == 0
     # The account still exists — you can keep using it.
     assert (await client.get("/v1/auth/me", headers=auth)).status_code == 200
+
+
+async def test_weekly_review_summarises_the_last_seven_days(client, auth, session, user):
+    from datetime import timedelta
+
+    from jarvis.db.models.domain import WorkSession
+
+    now = datetime.now(UTC)
+    done = Task(
+        user_id=user.id, title="Shipped it", status="done",
+        completed_at=now - timedelta(days=2),
+    )
+    slip = Task(user_id=user.id, title="Missed it", due_at=now - timedelta(days=1))
+    soon = Task(user_id=user.id, title="Next week", due_at=now + timedelta(days=3))
+    session.add_all([done, slip, soon])
+    session.add(
+        WorkSession(user_id=user.id, started_at=now - timedelta(days=1), active_minutes=90)
+    )
+    await session.commit()
+
+    r = await client.get("/v1/review/weekly", headers=auth)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["done"] == 1 and body["done_titles"] == ["Shipped it"]
+    assert body["slipped"] == 1 and body["slipped_titles"] == ["Missed it"]
+    assert body["focus_hours"] == 1.5
+    assert [u["title"] for u in body["upcoming"]] == ["Next week"]

@@ -31,10 +31,13 @@ from jarvis.core.logging import get_logger
 from jarvis.llm.budget import BudgetGuard
 from jarvis.llm.health import ProviderHealthStore
 from jarvis.llm.providers import (
+    CerebrasProvider,
+    CustomGatewayProvider,
     GeminiProvider,
     GroqProvider,
     LiteLLMProvider,
     OllamaProvider,
+    OpenRouterFree2Provider,
     OpenRouterFreeProvider,
     OpenRouterPaidProvider,
 )
@@ -54,11 +57,26 @@ log = get_logger(__name__)
 # lapsed, the system degrades to local inference instead of stopping. Slower and
 # weaker, but never exhausted and never billed.
 DEFAULT_CASCADE: dict[CallClass, tuple[str, ...]] = {
-    CallClass.CLASSIFY: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
-    CallClass.PLAN: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
-    CallClass.REFLECT: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
-    CallClass.CHAT: ("groq", "gemini", "openrouter_free", "ollama"),
-    CallClass.EXTRACT: ("gemini", "groq", "openrouter_paid", "ollama"),
+    CallClass.CLASSIFY: (
+        "gateway", "groq", "cerebras", "gemini", "openrouter_free",
+        "openrouter_free2", "openrouter_paid", "ollama",
+    ),
+    CallClass.PLAN: (
+        "gateway", "groq", "cerebras", "gemini", "openrouter_free",
+        "openrouter_free2", "openrouter_paid", "ollama",
+    ),
+    CallClass.REFLECT: (
+        "gateway", "groq", "cerebras", "gemini", "openrouter_free",
+        "openrouter_free2", "openrouter_paid", "ollama",
+    ),
+    CallClass.CHAT: (
+        "gateway", "groq", "cerebras", "gemini", "openrouter_free",
+        "openrouter_free2", "ollama",
+    ),
+    CallClass.EXTRACT: (
+        "gateway", "gemini", "groq", "cerebras", "openrouter_free2",
+        "openrouter_paid", "ollama",
+    ),
 }
 
 
@@ -66,9 +84,12 @@ def default_providers() -> dict[str, LiteLLMProvider]:
     return {
         p.name: p
         for p in (
+            CustomGatewayProvider(),
             GroqProvider(),
+            CerebrasProvider(),
             GeminiProvider(),
             OpenRouterFreeProvider(),
+            OpenRouterFree2Provider(),
             OpenRouterPaidProvider(),
             OllamaProvider(),
         )

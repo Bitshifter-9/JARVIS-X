@@ -89,16 +89,27 @@ async def test_a_slack_signature_over_a_different_body_is_refused(client, sessio
     assert (await session.scalars(select(Event))).all() == []
 
 
-async def test_slacks_url_verification_is_answered_only_after_the_signature_check(client):
+async def test_slacks_url_verification_is_answered_even_before_the_secret_is_set(client):
+    # The ownership handshake is a public challenge — echoed signed or not, so the URL
+    # verifies when you first save it in Slack (the signing secret may not be set yet).
     body = json.dumps({"type": "url_verification", "challenge": "abc123"}).encode()
-    response = await client.post("/webhooks/slack", content=body, headers=_slack_headers(body))
-    assert response.json() == {"challenge": "abc123"}
+    signed = await client.post("/webhooks/slack", content=body, headers=_slack_headers(body))
+    assert signed.json() == {"challenge": "abc123"}
 
     unsigned = await client.post(
         "/webhooks/slack", json={"type": "url_verification", "challenge": "abc123"}
     )
+    assert unsigned.status_code == 200 and unsigned.json() == {"challenge": "abc123"}
+
+
+async def test_a_real_slack_event_still_needs_a_valid_signature(client, session, user):
+    # A message event without a signature does nothing (no oracle, no ingest).
+    from jarvis.db.models.source import Event
+    from sqlalchemy import select as _select
+
+    unsigned = await client.post("/webhooks/slack", json=_slack_message())
     assert unsigned.status_code == 200
-    assert "abc123" not in unsigned.text
+    assert (await session.scalars(_select(Event))).all() == []
 
 
 async def test_a_linked_slack_message_is_ingested_as_untrusted_content(client, session, user):

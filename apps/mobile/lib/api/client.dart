@@ -511,6 +511,9 @@ class JarvisClient {
   Future<Map<String, dynamic>> focus() async =>
       await _send('GET', '/v1/focus') as Map<String, dynamic>;
 
+  Future<Map<String, dynamic>> weeklyReview() async =>
+      await _send('GET', '/v1/review/weekly') as Map<String, dynamic>;
+
   Future<Map<String, dynamic>> wipeAccount() async =>
       await _send('POST', '/v1/account/wipe', query: {'confirm': 'DELETE'})
           as Map<String, dynamic>;

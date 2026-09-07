@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets/orb.dart';
 import 'approvals.dart';
 import 'chat.dart';
+import 'command_palette.dart';
 import 'connections.dart';
 import 'devices.dart';
 import 'goals.dart';
@@ -130,7 +131,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     if (wide) {
       // ⌘1…⌘0 jump between tabs; ⌘K goes to Jarvis. Developers live on the keyboard.
       final bindings = <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => _index = 0,
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+            CommandPalette.open(context),
         for (final (i, key) in const [
           LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2, LogicalKeyboardKey.digit3,
           LogicalKeyboardKey.digit4, LogicalKeyboardKey.digit5, LogicalKeyboardKey.digit6,

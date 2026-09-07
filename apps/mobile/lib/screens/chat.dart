@@ -609,8 +609,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: TextField(
               controller: _input,
               textInputAction: TextInputAction.send,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: _listening ? 'Listening…' : 'Ask Jarvis…',
+                hintText: _listening
+                    ? 'Listening…'
+                    : 'Ask Jarvis…  (try /brief, /due, /screenshot)',
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
@@ -796,9 +799,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   // ── sending ────────────────────────────────────────────────────────
+  /// Slash-commands: shortcuts that expand to a natural request the agent understands.
+  static const _slash = {
+    '/brief': 'Give me my briefing now',
+    '/due': 'What is due today and this week?',
+    '/focus': 'What is the one thing I should do now?',
+    '/screenshot': 'Take a screenshot of my Mac',
+    '/ring': 'Ring my phone',
+    '/locate': 'Where is my phone?',
+    '/week': 'Give me my weekly review',
+  };
+
   Future<void> _send() async {
-    final text = _input.text.trim();
+    var text = _input.text.trim();
     if (text.isEmpty || _busy) return;
+    if (text.startsWith('/')) {
+      final cmd = text.split(' ').first.toLowerCase();
+      if (_slash.containsKey(cmd)) {
+        final rest = text.substring(cmd.length).trim();
+        text = rest.isEmpty ? _slash[cmd]! : '${_slash[cmd]!} $rest';
+      }
+    }
     _input.clear();
     await _sendText(text);
   }

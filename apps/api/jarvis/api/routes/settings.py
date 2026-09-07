@@ -37,7 +37,10 @@ _SECRET_MARKERS = ("key", "secret", "token", "password", "client_id", "auth_toke
 
 # Prefix → section, in display order. Anything unmatched lands in "General".
 SECTIONS: list[tuple[str, tuple[str, ...]]] = [
-    ("LLM providers", ("groq_", "gemini_", "openrouter_", "ollama_", "embedding_")),
+    (
+        "LLM providers",
+        ("groq_", "gemini_", "openrouter_", "ollama_", "cerebras_", "gateway_", "embedding_"),
+    ),
     ("Budget", ("enable_paid_llm", "monthly_budget", "llm_budget", "max_")),
     ("Agent", ("scheduler_", "heartbeat_", "quiet_hours", "global_pause")),
     ("Focus guard", ("focus_",)),

@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     openrouter_paid_model: str = "anthropic/claude-haiku-4.5"
     ollama_host: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.1:8b"
+    # More gateways so a single free-tier quota wall never blocks everything.
+    cerebras_api_key: str = ""
+    cerebras_model: str = "cerebras/llama-3.3-70b"
+    openrouter_free_model2: str = "meta-llama/llama-3.3-70b-instruct:free"
+    # A generic OpenAI-compatible gateway (a LiteLLM proxy, vLLM, OpenAI, or any
+    # OpenAI-shaped endpoint). Point one key at everything: it is tried first.
+    gateway_base_url: str = ""
+    gateway_api_key: str = ""
+    gateway_model: str = "gpt-4o-mini"
+    gateway_is_paid: bool = False
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     # ── budget ─────────────────────────────────────────────────────────

@@ -663,6 +663,17 @@ info, find-my-devices map; digests, weekly review, GraphRAG answers.
 
 | 13.13 | **Two production bugs from the screenshots.** (a) Chat replied "I answered but could not save that turn" whenever the agent/search hop needed a model and both free keys were spent: `_finish` now catches each hop (agent, search, remember, title) and degrades to a plain "could not reach a model just now" while still **saving the turn**. (b) Settings showed "Missing bearer token" on Mac and phone: the client kept its token only in-memory, so a client rebuild (the base URL is set on launch) came up unauthenticated. Tokens now live in a process-wide `SessionTokens` holder the new client seeds from, so it is never anonymous | ✅ Test: an ACTION-agent reply whose agent model raises still returns 200 with a graceful message and a saved user+assistant turn; Dart tests green |
 
+### Phase 14 — LLM gateways, and the Slack handshake — ✅ shipped
+
+| # | Task | Exit test |
+|---|---|---|
+| 14.1 | **LLM gateways so quota is never a wall.** Three providers added to every cascade: **Cerebras** (`cerebras_api_key`, a generous free tier), a **second free OpenRouter model** (`openrouter_free_model2`), and a **generic OpenAI-compatible gateway** (`gateway_base_url` + `gateway_api_key` + `gateway_model`) — a LiteLLM proxy, vLLM, OpenAI, or any OpenAI-shaped endpoint — tried **first** in every cascade, so one key can serve everything. `.env.example` and Settings carry them | ✅ Unit tests: all registered; the gateway is off until a base url is set and then leads every cascade; cerebras and the second free model are in the free lane |
+| 14.2 | **Slack URL verification fixed.** The `url_verification` challenge is now echoed **before** the signature check — it is a public one-time ownership handshake, so it must answer even before the signing secret is set on our side; every real event still requires a valid signature | ✅ Tests: the challenge is echoed signed or unsigned; a real message event without a signature ingests nothing |
+
+| 14.3 | **Weekly review** — `GET /v1/review/weekly`: done vs slipped over 7 days, focus hours, where the time went, what is due next week | ✅ test |
+| 14.4 | **Slash-commands** — `/brief /due /focus /screenshot /ring /locate /week` in chat expand to a natural request the agent runs; the input hints them | ✅ |
+| 14.5 | **Mac command palette** — ⌘K opens a searchable list: jump to any tab, ask a question, screenshot the Mac, ring the phone, scan mail | ✅ |
+
 ## 13. Risks
 
 | Risk | Impact | Mitigation |
