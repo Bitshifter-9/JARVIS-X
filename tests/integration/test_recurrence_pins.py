@@ -77,3 +77,37 @@ async def test_pinned_conversations_sort_first(client, auth):
     # unpin
     await client.patch(f"/v1/conversations/{a['id']}", json={"pinned": False}, headers=auth)
     assert (await client.get("/v1/conversations", headers=auth)).json()[0]["id"] == b["id"]
+
+
+async def test_a_checklist_rides_along_on_a_task(client, auth):
+    """FEATURES-50 #4: a deadline carries a checklist; PATCH replaces it, and the
+    persisted done-state round-trips."""
+    created = await client.post(
+        "/v1/tasks",
+        json={
+            "title": "Ship the release",
+            "checklist": [{"text": "tag"}, {"text": "changelog"}, {"text": "deploy"}],
+        },
+        headers=auth,
+    )
+    assert created.status_code == 201
+    task = created.json()
+    assert [i["text"] for i in task["checklist"]] == ["tag", "changelog", "deploy"]
+    assert all(i["done"] is False for i in task["checklist"])
+
+    # Tick the first item.
+    updated = await client.patch(
+        f"/v1/tasks/{task['id']}",
+        json={"checklist": [{"text": "tag", "done": True},
+                            {"text": "changelog", "done": False},
+                            {"text": "deploy", "done": False}]},
+        headers={**auth, "If-Match": str(task["version"])},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["checklist"][0] == {"text": "tag", "done": True}
+
+    # It persists on the next read.
+    got = next(
+        t for t in (await client.get("/v1/tasks", headers=auth)).json() if t["id"] == task["id"]
+    )
+    assert got["checklist"][0]["done"] is True

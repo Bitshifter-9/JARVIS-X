@@ -35,6 +35,11 @@ class GoalOut(BaseModel):
     version: int
 
 
+class ChecklistItem(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+    done: bool = False
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     goal_id: uuid.UUID | None = None
@@ -45,6 +50,7 @@ class TaskCreate(BaseModel):
     is_optional: bool = False
     depends_on: list[uuid.UUID] = Field(default_factory=list)
     recurrence: str | None = Field(default=None, pattern="^(daily|weekly|weekdays|monthly)$")
+    checklist: list[ChecklistItem] = Field(default_factory=list)
 
 
 class TaskUpdate(BaseModel):
@@ -55,6 +61,7 @@ class TaskUpdate(BaseModel):
     remaining_minutes: int | None = Field(default=None, ge=0)
     is_optional: bool | None = None
     recurrence: str | None = Field(default=None, pattern="^(daily|weekly|weekdays|monthly)?$")
+    checklist: list[ChecklistItem] | None = None
 
 
 class TaskOut(BaseModel):
@@ -70,6 +77,7 @@ class TaskOut(BaseModel):
     evidence_span: str | None
     version: int
     recurrence: str | None = None
+    checklist: list[ChecklistItem] = Field(default_factory=list)
     # Where a deadline was read from — "Gmail · Saritha" — so a task can be trusted.
     source_provider: str | None = None
     source_author: str | None = None
@@ -115,7 +123,7 @@ def _task_out(task: Any, source: Any = None) -> TaskOut:
         estimate_minutes=task.estimate_minutes, remaining_minutes=task.remaining_minutes,
         priority=task.priority, is_optional=task.is_optional,
         evidence_span=task.evidence_span, version=task.version,
-        recurrence=task.recurrence,
+        recurrence=task.recurrence, checklist=task.checklist or [],
         source_provider=source.provider if source else None,
         source_author=source.author if source else None,
         source_title=source.title if source else None,
@@ -240,7 +248,7 @@ async def create_task(body: TaskCreate, user: CurrentUser, session: SessionDep) 
         user.id, title=body.title, goal_id=body.goal_id, due_at=body.due_at,
         timezone=body.timezone, estimate_minutes=body.estimate_minutes,
         priority=body.priority, is_optional=body.is_optional, depends_on=body.depends_on,
-        recurrence=body.recurrence,
+        recurrence=body.recurrence, checklist=[i.model_dump() for i in body.checklist],
     )
     return _task_out(task)
 

@@ -57,6 +57,7 @@ class Task {
     this.sourceTitle,
     this.sourceUrl,
     this.recurrence,
+    this.checklist = const [],
   });
 
   final String id;
@@ -80,6 +81,9 @@ class Task {
   final String? evidenceSpan;
   final int version;
 
+  /// A checklist under the deadline: each item is {text, done}.
+  final List<Map<String, dynamic>> checklist;
+
   factory Task.fromJson(Map<String, dynamic> json) => Task(
         id: json['id'] as String,
         goalId: json['goal_id'] as String?,
@@ -99,6 +103,8 @@ class Task {
         sourceTitle: json['source_title'] as String?,
         sourceUrl: json['source_url'] as String?,
         recurrence: json['recurrence'] as String?,
+        checklist: ((json['checklist'] as List<dynamic>?) ?? const [])
+            .cast<Map<String, dynamic>>(),
       );
 }
 

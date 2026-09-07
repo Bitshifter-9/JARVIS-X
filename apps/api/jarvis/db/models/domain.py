@@ -91,6 +91,8 @@ class Task(UUIDPrimaryKey, Timestamps, Base):
     # A recurring deadline: "daily" | "weekly" | "monthly" | "weekdays". When one is
     # completed, the next is created automatically (FEATURES-50 3).
     recurrence: Mapped[str | None] = mapped_column(String(16))
+    # A checklist under the deadline: [{"text": str, "done": bool}] (FEATURES-50 #4).
+    checklist: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class TaskDependency(Timestamps, Base):

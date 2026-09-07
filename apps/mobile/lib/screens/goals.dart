@@ -377,10 +377,28 @@ class _DeadlineTile extends ConsumerWidget {
                     fontStyle: FontStyle.italic,
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6))),
           ],
+          if (task.estimateMinutes != null) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.timelapse, size: 14,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+              const SizedBox(width: 6),
+              Text(
+                '${_mins(task.estimateMinutes!)} estimated'
+                '${task.remainingMinutes != null ? ' · ${_mins(task.remainingMinutes!)} left' : ''}',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ]),
+          ],
+          _Checklist(task: task),
         ]),
       ),
     );
   }
+
+  static String _mins(int m) => m >= 60
+      ? '${m ~/ 60}h${m % 60 == 0 ? '' : ' ${m % 60}m'}'
+      : '${m}m';
 
   Future<void> _setDone(BuildContext context, WidgetRef ref, Task task,
       {required bool done}) async {
@@ -425,4 +443,125 @@ String _dayGroup(DateTime at) {
   if (diff < 7) return DateFormat('EEEE').format(at);
   if (diff < 14) return 'Next week';
   return DateFormat('MMMM').format(at);
+}
+
+/// A checklist under a deadline (FEATURES-50 #4). Ticking an item PATCHes the whole
+/// list back with the task version, then refreshes — small list, simplest correct thing.
+class _Checklist extends ConsumerWidget {
+  const _Checklist({required this.task});
+
+  final Task task;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final done = task.checklist.where((i) => i['done'] == true).length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (task.checklist.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        Text('Checklist · $done/${task.checklist.length}',
+            style: Theme.of(context).textTheme.labelSmall),
+      ],
+      for (var i = 0; i < task.checklist.length; i++)
+        InkWell(
+          onTap: () => _toggle(context, ref, i),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(children: [
+              Icon(
+                task.checklist[i]['done'] == true
+                    ? Icons.check_box
+                    : Icons.check_box_outline_blank,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  task.checklist[i]['text'] as String? ?? '',
+                  style: task.checklist[i]['done'] == true
+                      ? TextStyle(
+                          decoration: TextDecoration.lineThrough,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5))
+                      : null,
+                ),
+              ),
+            ]),
+          ),
+        ),
+      InkWell(
+        onTap: () => _addStep(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            Icon(Icons.add, size: 16, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Text('Add step',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.primary)),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  Future<void> _addStep(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add a step'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'e.g. draft the email'),
+          onSubmitted: (v) => Navigator.pop(context, v.trim()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty) return;
+    final next = [
+      ...task.checklist.map((i) => {'text': i['text'], 'done': i['done']}),
+      {'text': text, 'done': false},
+    ];
+    try {
+      await ref.read(clientProvider).updateTask(task.id, {'checklist': next}, version: task.version);
+      ref.invalidate(tasksProvider);
+      ref.invalidate(allTasksProvider);
+    } on ProblemException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _toggle(BuildContext context, WidgetRef ref, int index) async {
+    final next = [
+      for (var i = 0; i < task.checklist.length; i++)
+        {
+          'text': task.checklist[i]['text'],
+          'done': i == index ? !(task.checklist[i]['done'] == true) : task.checklist[i]['done'],
+        }
+    ];
+    try {
+      await ref.read(clientProvider).updateTask(task.id, {'checklist': next}, version: task.version);
+      ref.invalidate(tasksProvider);
+      ref.invalidate(allTasksProvider);
+    } on ProblemException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
 }

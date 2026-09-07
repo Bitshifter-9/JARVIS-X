@@ -7,10 +7,10 @@ shippable on its own; the batches below are the order of work.
 1. ✅ Snooze / reschedule a deadline (chips: +1h, tonight, tomorrow, +1 week, pick)
 2. ✅ Agenda view — every deadline grouped by day, a 7-day strip
 3. ✅ Recurring deadlines ("every Monday", "monthly rent")
-4. ⬜ Sub-tasks / a checklist under a deadline
+4. ✅ Sub-tasks / a checklist under a deadline
 5. ✅ Task priority you can set and sort by
-6. ⬜ Estimate + "time left to work" shown per deadline
-7. ⬜ Quick-add natural language ("pay rent friday 6pm") parsed by the regex + model
+6. ✅ Estimate + "time left to work" shown per deadline
+7. ✅ Quick-add natural language ("pay rent friday 6pm") parsed by the regex + model
 8. ✅ Overdue digest ("3 things slipped — reschedule or drop?")
 9. ✅ "Focus next" — the one thing to do now, from the risk engine
 10. ⬜ Calendar month grid with dots on days that have deadlines

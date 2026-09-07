@@ -101,11 +101,13 @@ class GoalService:
         evidence_span: str | None = None,
         depends_on: list[uuid.UUID] | None = None,
         recurrence: str | None = None,
+        checklist: list[dict] | None = None,
     ) -> Task:
         if due_at is not None and due_at.tzinfo is None:
             raise ValueError("due_at must be timezone-aware; store a confirmed UTC instant")
 
         task = Task(
+            checklist=checklist or [],
             user_id=user_id,
             goal_id=goal_id,
             title=title,
