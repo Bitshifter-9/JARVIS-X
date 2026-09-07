@@ -202,8 +202,9 @@ Steps 1–4 are done (app created from `docs/slack-manifest.json`, token + secre
 5. [api.slack.com/apps](https://api.slack.com/apps) → your app → **Event Subscriptions** →
    toggle **On** → *Request URL* `https://pranav-jarvis.duckdns.org/webhooks/slack` → wait
    for **Verified ✓**.
-6. Same page → **Subscribe to bot events** → *Add Bot User Event* ×3: `message.channels`,
-   `message.groups`, `message.im` → **Save Changes** → Slack asks you to **reinstall** → do.
+6. Same page → **Subscribe to bot events** → *Add Bot User Event*: `message.channels`,
+   `message.groups`, `message.im`, and `message.mpim` (for group DMs) → **Save Changes**
+   → Slack asks you to **reinstall** → do.
 7. Add the bot to the channels that matter. `/invite @JARVIS X` works on desktop; on
    **mobile it often says "you don't have permission"** — that is a Slack workspace
    restriction, not JARVIS. Two reliable ways instead:
@@ -216,6 +217,11 @@ Steps 1–4 are done (app created from `docs/slack-manifest.json`, token + secre
    requires an **admin to approve apps** (ask the workspace owner, or use a workspace you
    admin). With the `channels:join` scope in the manifest, JARVIS can also add itself to a
    **public** channel once installed.
+8. **Talk to JARVIS in a DM.** In Slack, open the **Apps** section in the sidebar (or
+   search "JARVIS X") → open it → send a message. A DM needs no invite; once your Slack
+   member id is linked, a deadline you post there becomes a task just like a channel.
+   For a **group DM**, add the app to it the same way you add it to a channel, after the
+   `message.mpim` event and `mpim:history` scope are enabled (reinstall to apply).
 8. Link your Slack user: profile → ⋯ → *Copy member ID* (`U0…`), then with the `$TOKEN`
    from §3:
    ```bash

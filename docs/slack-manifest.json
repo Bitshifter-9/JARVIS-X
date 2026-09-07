@@ -18,6 +18,7 @@
         "channels:history",
         "groups:history",
         "im:history",
+        "mpim:history",
         "channels:read",
         "users:read"
       ]
