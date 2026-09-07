@@ -18,6 +18,7 @@ from jarvis.api.routes import (
     approvals,
     artifacts,
     auth,
+    capture,
     chat,
     clipboard,
     connectors,
@@ -176,6 +177,7 @@ def create_app() -> FastAPI:
     app.include_router(personas.router)
     app.include_router(insights.router)
     app.include_router(search.router)
+    app.include_router(capture.router)
     app.include_router(clipboard.router)
     app.include_router(graph.router)
     app.include_router(proactivity.router)

@@ -46,7 +46,7 @@ LLM router cascade with a local Ollama fallback.
    synced clipboard already shipped).
 8. ⬜ **Photo & screenshot semantic index.** On-device caption + OCR every image once, store
    the caption, make your camera roll searchable ("that receipt from Goa").
-9. ⬜ **One-tap / voice quick-capture.** Hold-to-talk anywhere → transcribed, classified,
+9. ✅ **One-tap / voice quick-capture.** Hold-to-talk anywhere → transcribed, classified,
    filed — the frictionless inbox for a fleeting thought.
 10. ⬜ **Meeting & call capture.** Auto-transcribe (with consent), then extract summary,
     decisions, and action items into tasks.

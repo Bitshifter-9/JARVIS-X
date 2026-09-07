@@ -569,6 +569,10 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> anomalies() async =>
       (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// Quick-capture a thought: filed as a deadline if dated, else a memory (#9).
+  Future<Map<String, dynamic>> capture(String text) async =>
+      await _send('POST', '/v1/capture', body: {'text': text}) as Map<String, dynamic>;
+
   /// Life search: one box over everything captured (second-brain #26).
   Future<List<Map<String, dynamic>>> lifeSearch(String q) async {
     final data = await _send('GET', '/v1/search', query: {'q': q}) as Map<String, dynamic>;

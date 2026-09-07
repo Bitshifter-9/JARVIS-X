@@ -65,6 +65,17 @@ class MemoryService:
             return None
 
         vector = self.embedder.embed([content])[0]
+
+        # Consolidate rather than accumulate (mem0-style): if we already hold a near-
+        # identical memory, don't store a duplicate — just reinforce the original. Keeps
+        # the store small and retrieval sharp instead of bloating with restatements.
+        duplicate = await self._near_duplicate(user_id, vector, kind)
+        if duplicate is not None:
+            duplicate.importance = min(1.0, duplicate.importance + 0.1)
+            await self.session.flush()
+            log.info("memory_consolidated", kind=kind)
+            return duplicate
+
         memory = Memory(
             user_id=user_id,
             kind=kind,
@@ -77,6 +88,29 @@ class MemoryService:
         self.session.add(memory)
         await self.session.flush()
         return memory
+
+    # Above this cosine similarity, a new memory is a restatement, not new information.
+    _DUP_DISTANCE = 0.03  # cosine distance = 1 − similarity
+
+    async def _near_duplicate(
+        self, user_id: uuid.UUID, vector: list[float], kind: str
+    ) -> Memory | None:
+        result = await self.session.execute(
+            select(Memory, Memory.embedding.cosine_distance(vector).label("d"))
+            .where(
+                Memory.user_id == user_id,
+                Memory.kind == kind,
+                Memory.invalidated_at.is_(None),
+                Memory.embedding.is_not(None),
+            )
+            .order_by("d")
+            .limit(1)
+        )
+        hit = result.first()
+        if hit is None:
+            return None
+        memory, distance = hit
+        return memory if distance is not None and distance <= self._DUP_DISTANCE else None
 
     async def correct(
         self, user_id: uuid.UUID, memory_id: uuid.UUID, *, content: str

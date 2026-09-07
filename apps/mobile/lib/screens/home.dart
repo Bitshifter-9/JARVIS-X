@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models.dart';
@@ -497,11 +498,70 @@ class _QuickCaptureSheet extends ConsumerStatefulWidget {
 
 class _QuickCaptureSheetState extends ConsumerState<_QuickCaptureSheet> {
   final _text = TextEditingController();
+  final _stt = SpeechToText();
+  bool _listening = false;
+  bool _saving = false;
 
   @override
   void dispose() {
+    _stt.stop();
     _text.dispose();
     super.dispose();
+  }
+
+  Future<void> _dictate() async {
+    if (_listening) {
+      await _stt.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    final ok = await _stt.initialize();
+    if (!ok) return;
+    setState(() => _listening = true);
+    await _stt.listen(
+      listenOptions: SpeechListenOptions(
+          listenFor: const Duration(seconds: 20), pauseFor: const Duration(seconds: 2)),
+      onResult: (r) {
+        if (mounted) setState(() => _text.text = r.recognizedWords);
+        if (r.finalResult && mounted) setState(() => _listening = false);
+      },
+    );
+  }
+
+  /// File the thought where it belongs: dated → a deadline, else a searchable memory.
+  Future<void> _capture() async {
+    final t = _text.text.trim();
+    if (t.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final r = await ref.read(clientProvider).capture(t);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ref.invalidate(tasksProvider);
+      ref.invalidate(hudProvider);
+      final msg = switch (r['kind']) {
+        'task' => 'Deadline added — ${r['title']}',
+        'note' => 'Captured — you can find it in search',
+        'refused' => 'That looked like a secret, so I didn\'t keep it',
+        _ => 'Captured',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } on Object catch (e) {
+      if (Net.isNetworkError(e)) {
+        await Outbox.enqueue({'type': 'quickAdd', 'text': t});
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Offline — queued, will send when you reconnect')));
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _ask() {
@@ -583,25 +643,38 @@ class _QuickCaptureSheetState extends ConsumerState<_QuickCaptureSheet> {
           minLines: 1,
           maxLines: 4,
           textInputAction: TextInputAction.send,
-          onSubmitted: (_) => _ask(),
-          decoration: const InputDecoration(
-              hintText: 'A thought, a question, or a deadline title'),
+          onSubmitted: (_) => _capture(),
+          decoration: InputDecoration(
+            hintText: _listening ? 'Listening…' : 'A thought, a question, or a deadline',
+            suffixIcon: IconButton(
+              tooltip: _listening ? 'Stop' : 'Dictate',
+              icon: Icon(_listening ? Icons.mic : Icons.mic_none,
+                  color: _listening ? Theme.of(context).colorScheme.primary : null),
+              onPressed: _dictate,
+            ),
+          ),
         ),
         const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: _saving ? null : _capture,
+          icon: const Icon(Icons.bolt),
+          label: Text(_saving ? 'Saving…' : 'Capture'),
+        ),
+        const SizedBox(height: 10),
         Row(children: [
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _addDeadline,
               icon: const Icon(Icons.event_available_outlined),
-              label: const Text('Add deadline'),
+              label: const Text('Deadline'),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: FilledButton.icon(
+            child: OutlinedButton.icon(
               onPressed: _ask,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Ask Jarvis'),
+              label: const Text('Ask'),
             ),
           ),
         ]),
