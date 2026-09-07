@@ -196,7 +196,22 @@ async def tick(session: AsyncSession) -> dict[str, Any]:
         report["slack"] = await scan_slack_all(session)
     except Exception as exc:  # noqa: BLE001
         log.error("connector_sync_failed", provider="slack", error=str(exc)[:300])
+    try:
+        report["insights"] = await derive_insights_all(session, accounts)
+    except Exception as exc:  # noqa: BLE001
+        log.error("connector_sync_failed", provider="insights", error=str(exc)[:300])
     return report
+
+
+async def derive_insights_all(session: AsyncSession, accounts: list[SourceAccount]) -> int:
+    """Read new mail into labels/spending/travel for every user with a mail account."""
+    from jarvis.services.insights import derive_insights
+
+    user_ids = {a.user_id for a in accounts if a.provider in ("gmail",)}
+    total = 0
+    for uid in user_ids:
+        total += await derive_insights(session, uid)
+    return total
 
 
 async def scan_slack_all(session: AsyncSession) -> dict[str, int]:

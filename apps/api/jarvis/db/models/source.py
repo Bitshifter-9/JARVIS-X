@@ -141,3 +141,30 @@ class Event(UUIDPrimaryKey, Timestamps, Base):
     # (user, provider, provider_event_id). The replay guard, enforced by the index.
     idempotency_key: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class MailInsight(UUIDPrimaryKey, Timestamps, Base):
+    """One derived reading of an email: its project label, and — when present — the
+    spending or travel it describes. One row per source object (unique), so re-deriving
+    is idempotent and cheap to skip.
+    """
+
+    __tablename__ = "mail_insights"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_objects.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+    label: Mapped[str] = mapped_column(String(32), nullable=False, default="Other")
+    # Spending, when the mail is a receipt or bill. Amount is in the minor-unit-free
+    # float the mail states; currency is an ISO-ish code or symbol as read.
+    amount: Mapped[float | None] = mapped_column()
+    currency: Mapped[str | None] = mapped_column(String(8))
+    merchant: Mapped[str | None] = mapped_column(String(200))
+    is_bill: Mapped[bool] = mapped_column(nullable=False, default=False)
+    # Travel, when the mail is a flight/hotel confirmation: {type, when, where, ref}.
+    travel: Mapped[dict | None] = mapped_column(JSONB)

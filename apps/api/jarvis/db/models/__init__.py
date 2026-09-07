@@ -55,6 +55,7 @@ from jarvis.db.models.ops import (
 from jarvis.db.models.source import (
     ConnectorCursor,
     Event,
+    MailInsight,
     SourceAccount,
     SourceObject,
 )
@@ -101,6 +102,7 @@ __all__ = [
     "Schedule",
     "SettingOverride",
     "SourceAccount",
+    "MailInsight",
     "SourceObject",
     "StandingPermission",
     "Task",

@@ -15,6 +15,7 @@ import 'connections.dart';
 import 'devices.dart';
 import 'goals.dart';
 import 'hud.dart';
+import 'insights.dart';
 import 'routines.dart';
 import 'settings.dart';
 import 'timeline.dart';
@@ -97,6 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     _Destination('Train', Icons.school_outlined, Icons.school, TrainScreen()),
     _Destination('Videos', Icons.movie_outlined, Icons.movie, VideosScreen()),
     _Destination('Devices', Icons.devices_outlined, Icons.devices, DevicesScreen()),
+    _Destination('Insights', Icons.insights_outlined, Icons.insights, InsightsScreen()),
     _Destination('Settings', Icons.settings_outlined, Icons.settings, SettingsScreen()),
   ];
 

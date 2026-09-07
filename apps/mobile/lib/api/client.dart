@@ -521,6 +521,22 @@ class JarvisClient {
   Future<Map<String, dynamic>> weeklyReview() async =>
       await _send('GET', '/v1/review/weekly') as Map<String, dynamic>;
 
+  // ── mail intelligence: labels, spending, travel, away digest ───────
+  Future<Map<String, dynamic>> insightsScan() async =>
+      await _send('POST', '/v1/insights/scan') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> spending({int days = 30}) async =>
+      await _send('GET', '/v1/insights/spending?days=$days') as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> travel() async =>
+      (await _send('GET', '/v1/insights/travel') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  Future<Map<String, dynamic>> insightLabels() async =>
+      await _send('GET', '/v1/insights/labels') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> awayDigest({int hours = 24}) async =>
+      await _send('GET', '/v1/insights/away?hours=$hours') as Map<String, dynamic>;
+
   Future<Map<String, dynamic>> wipeAccount() async =>
       await _send('POST', '/v1/account/wipe', query: {'confirm': 'DELETE'})
           as Map<String, dynamic>;
