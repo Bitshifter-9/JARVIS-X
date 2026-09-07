@@ -354,6 +354,12 @@ final allTasksProvider = StreamProvider.autoDispose<List<Task>>(
       ),
 );
 
+/// Senders/channels you disliked — the Muted section on Goals (#14).
+final reminderMutesProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>(
+  (ref) => ref.watch(clientProvider).reminderMutes(),
+);
+
 /// Text handed to the chat from elsewhere (the Home ask-bar): the chat sends it.
 final chatPrefillProvider = StateProvider<String?>((ref) => null);
 

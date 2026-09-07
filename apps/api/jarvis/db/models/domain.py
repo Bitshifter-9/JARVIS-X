@@ -176,3 +176,27 @@ class Commitment(UUIDPrimaryKey, Timestamps, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # When an about-to-forget nudge was last sent, so it isn't sent twice (#24).
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReminderMute(UUIDPrimaryKey, Timestamps, Base):
+    """A sender/channel the user disliked, so its auto-extracted reminders stop (#14).
+
+    Keyed on a ``provider:author`` signature (e.g. ``gmail:promo@brand.com`` or
+    ``whatsapp:Some Channel``). While a signature is muted, the deadline pipeline skips
+    creating tasks from that source; the "Muted" section lists these so the user can undo.
+    """
+
+    __tablename__ = "reminder_mutes"
+    __table_args__ = (
+        Index("uq_reminder_mutes_user_sig", "user_id", "signature", unique=True),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # provider:normalized-author — the thing we suppress on.
+    signature: Mapped[str] = mapped_column(String(360), nullable=False)
+    # Human-readable, for the Muted section — "Gmail · promo@brand.com".
+    label: Mapped[str] = mapped_column(String(360), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(32))
+    author: Mapped[str | None] = mapped_column(String(320))

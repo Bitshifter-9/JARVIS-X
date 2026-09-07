@@ -211,6 +211,12 @@ class _Deadlines extends ConsumerWidget {
           Text('Agenda', style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
           Text('${dated.length} open', style: Theme.of(context).textTheme.labelMedium),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Muted senders',
+            icon: const Icon(Icons.notifications_off_outlined, size: 18),
+            onPressed: () => showMutedReminders(context, ref),
+          ),
         ]),
       ),
       if (dated.isEmpty)
@@ -335,6 +341,26 @@ class _DeadlineTile extends ConsumerWidget {
               icon: const Icon(Icons.check_circle_outline),
               onPressed: () => _setDone(context, ref, task, done: true),
             ),
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert, size: 20),
+              onSelected: (v) {
+                if (v == 'dislike') _dislike(context, ref, task);
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'dislike',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.notifications_off_outlined),
+                    title: Text(task.sourceProvider == null
+                        ? 'Not useful — dismiss'
+                        : 'Stop reminders from this sender'),
+                  ),
+                ),
+              ],
+            ),
           ]),
           const SizedBox(height: 4),
           Row(children: [
@@ -418,6 +444,33 @@ class _DeadlineTile extends ConsumerWidget {
           ),
         ));
       }
+    } on ProblemException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _dislike(BuildContext context, WidgetRef ref, Task task) async {
+    try {
+      final res = await ref.read(clientProvider).dislikeReminder(task.id);
+      ref.invalidate(tasksProvider);
+      ref.invalidate(allTasksProvider);
+      ref.invalidate(hudProvider);
+      ref.invalidate(reminderMutesProvider);
+      if (!context.mounted) return;
+      final muted = res['muted'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(muted
+            ? "Muted. You won't get reminders from this sender."
+            : 'Dismissed.'),
+        action: muted
+            ? SnackBarAction(
+                label: 'View muted',
+                onPressed: () => showMutedReminders(context, ref),
+              )
+            : null,
+      ));
     } on ProblemException catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -731,5 +784,90 @@ class _DayCell extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+
+/// The Muted section (#14): every sender/channel the user disliked, with an un-mute.
+/// Fetched fresh when opened; un-mute removes the rule so its reminders come back.
+void showMutedReminders(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (context) => const _MutedSheet(),
+  );
+}
+
+class _MutedSheet extends ConsumerWidget {
+  const _MutedSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mutes = ref.watch(reminderMutesProvider);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.notifications_off_outlined, size: 20),
+            const SizedBox(width: 10),
+            Text('Muted reminders', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 4),
+          Text('Senders and channels you disliked. JARVIS stops turning their mail and '
+              'messages into reminders. Un-mute to hear from one again.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 12),
+          mutes.when(
+            loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator())),
+            error: (e, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text('$e', style: Theme.of(context).textTheme.bodySmall)),
+            data: (list) => list.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text('Nothing muted. Use “Stop reminders from this sender” on a '
+                        'deadline to add one.',
+                        style: Theme.of(context).textTheme.bodySmall))
+                : Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: list.length,
+                      itemBuilder: (context, i) {
+                        final m = list[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.block, color: JarvisColors.danger),
+                          title: Text('${m['label']}'),
+                          trailing: TextButton(
+                            onPressed: () => _unmute(context, ref, '${m['id']}'),
+                            child: const Text('Un-mute'),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _unmute(BuildContext context, WidgetRef ref, String id) async {
+    try {
+      await ref.read(clientProvider).unmuteReminder(id);
+      ref.invalidate(reminderMutesProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Un-muted. Reminders from this sender can return.')));
+      }
+    } on ProblemException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 }

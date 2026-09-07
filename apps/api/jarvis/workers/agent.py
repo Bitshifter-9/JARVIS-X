@@ -114,6 +114,13 @@ async def handle_normalize(session: AsyncSession, job, *, router=None) -> dict[s
             log.warning("triage_failed", error=str(exc)[:200])
             triage = {"error": str(exc)[:200]}
 
+    # Disliked sender/channel: the user muted these, so no reminder is created (#14).
+    from jarvis.services.reminders import is_muted
+
+    if await is_muted(session, event.user_id, source.provider, source.author):
+        await events.mark_processed(event.event_id)
+        return {"muted": True, "provider": source.provider, "triage": triage}
+
     # Structured deadlines need no model. Classroom and Canvas already told us the date.
     structured = payload.get("due_at")
     if structured:

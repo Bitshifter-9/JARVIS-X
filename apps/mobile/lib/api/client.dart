@@ -573,6 +573,20 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> upcoming() async =>
       (await _send('GET', '/v1/proactivity/upcoming') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  // ── disliked reminders: mute a sender/channel (#14) ───────────────
+  /// Dislike a reminder: mute its sender so future ones stop, and clear the ones
+  /// already in the list from that sender. Returns {muted, dismissed, signature}.
+  Future<Map<String, dynamic>> dislikeReminder(String taskId) async =>
+      await _send('POST', '/v1/reminders/dislike/$taskId') as Map<String, dynamic>;
+
+  /// The Muted section: every sender/channel you've disliked.
+  Future<List<Map<String, dynamic>>> reminderMutes() async =>
+      (await _send('GET', '/v1/reminders/mutes') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  /// Un-mute a sender so its reminders come back.
+  Future<void> unmuteReminder(String muteId) async =>
+      _send('DELETE', '/v1/reminders/mutes/$muteId');
+
   // ── commitment tracking (second-brain #22) ────────────────────────
   Future<List<Map<String, dynamic>>> commitments() async =>
       (await _send('GET', '/v1/commitments') as List<dynamic>).cast<Map<String, dynamic>>();

@@ -35,6 +35,10 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#24 About-to-forget** — a "Coming up" surface plus a proactive "you said you'd…" nudge.
 - ✅ **Memory optimisation** — mem0-style consolidation (dedupe near-identical) + a *forget* tier
   (recall reinforces; unused episodic memories age out past a TTL). This is the storage-budget spine.
+- 🚧 **#14 Preference learning — dislike a reminder.** Thumbs-down a deadline and JARVIS mutes its
+  sender/channel: future mail/messages from that source stop becoming reminders, and the ones
+  already in the list are cleared. A "Muted" section on Goals lists them, un-mute to reverse.
+  The first slice of the reject→learn loop; a full ranker over every accept/edit comes later.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -75,8 +79,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     draft in your voice and to coach (§D).
 13. ⬜ **Personal phrasebook.** Your recurring jargon, names, and acronyms → feeds the
     transcriber and drafter so it stops mishearing "Guru Vai" as "guruvhy."
-14. ⬜ **Preference learning from choices.** Every accept/reject/edit of a suggestion trains a
-    lightweight ranker — the system's taste converges on yours.
+14. 🚧 **Preference learning from choices.** Every accept/reject/edit of a suggestion trains a
+    lightweight ranker — the system's taste converges on yours. *Shipped:* dislike a reminder →
+    its sender/channel is muted so it stops nagging (a "Muted" section on Goals holds the rules).
 15. ⬜ **Rhythm model.** When you focus, when you slump, your energy curve by hour/day —
     so JARVIS schedules and nudges *when you're actually receptive*.
 16. ⬜ **Deepened relationship graph.** Who matters, how you talk to them, your usual
