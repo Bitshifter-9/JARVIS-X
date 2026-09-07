@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../state/connectivity.dart';
 import 'cache.dart';
 import 'models.dart';
 
@@ -83,8 +84,15 @@ class JarvisClient {
       ..headers.addAll({..._headers, ...?extraHeaders});
     if (body != null) request.body = jsonEncode(body);
 
-    final streamed = await _http.send(request);
+    final http.StreamedResponse streamed;
+    try {
+      streamed = await _http.send(request);
+    } on Object catch (e) {
+      if (Net.isNetworkError(e)) Net.markOffline();
+      rethrow;
+    }
     final response = await http.Response.fromStream(streamed);
+    Net.markOnline();
 
     if (response.statusCode == 401 &&
         retryOnUnauthorized &&

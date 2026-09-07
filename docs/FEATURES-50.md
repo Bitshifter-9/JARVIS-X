@@ -57,7 +57,7 @@ shippable on its own; the batches below are the order of work.
 43. ✅ In-app changelog / "what's new"
 44. ✅ Data export & account wipe
 45. ✅ Audit log viewer with filters
-46. ⬜ Offline banner + queued actions replay
+46. ✅ Offline banner + queued actions replay
 47. ✅ Accessibility pass (font scale, contrast, labels)
 48. ⬜ Widgets (Android home-screen "next deadline")
 49. ✅ Localisation scaffold (English first)

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models.dart';
 import '../state/providers.dart';
+import '../state/connectivity.dart';
 import '../theme.dart';
 import '../widgets/orb.dart';
 import 'approvals.dart';
@@ -58,8 +59,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
     // comes back to the front.
     _refresh = Timer.periodic(const Duration(seconds: 45), (_) => _refreshTab(_current));
     _restoreTab(); // continue where we left off (FEATURES-50 #20)
+    Net.offline.addListener(_onNet); // offline banner + replay (FEATURES-50 #46)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) Changelog.showIfNew(context); // what's new, once (FEATURES-50 #43)
+      if (!mounted) return;
+      Changelog.showIfNew(context); // what's new, once (FEATURES-50 #43)
+      Outbox.flush(ref.read(clientProvider)); // replay anything queued last session
+    });
+  }
+
+  void _onNet() {
+    if (Net.offline.value || !mounted) return;
+    // Back online: replay queued actions, then refresh what's on screen.
+    Outbox.flush(ref.read(clientProvider)).then((sent) {
+      if (!mounted) return;
+      if (sent > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Sent $sent queued action${sent == 1 ? '' : 's'}')));
+      }
+      _refreshTab(_current);
     });
   }
 
@@ -85,6 +102,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
   @override
   void dispose() {
     _refresh?.cancel();
+    Net.offline.removeListener(_onNet);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -148,17 +166,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
         .length;
     // A short fade and lift on every switch, so a tab change reads as a scene change
     // while the IndexedStack underneath keeps every screen's state.
-    final body = TweenAnimationBuilder<double>(
-      key: ValueKey(_index),
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      child: IndexedStack(index: _index, children: [for (final d in _all) d.screen]),
-      builder: (context, v, child) => Opacity(
-        opacity: v,
-        child: Transform.translate(offset: Offset(0, (1 - v) * 10), child: child),
+    final Widget body = Column(children: [
+      const _OfflineBar(),
+      Expanded(
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(_index),
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          child: IndexedStack(index: _index, children: [for (final d in _all) d.screen]),
+          builder: (context, v, child) => Opacity(
+            opacity: v,
+            child: Transform.translate(offset: Offset(0, (1 - v) * 10), child: child),
+          ),
+        ),
       ),
-    );
+    ]);
 
     if (wide) {
       // ⌘1…⌘0 jump between tabs; ⌘K goes to Jarvis. Developers live on the keyboard.
@@ -482,6 +505,17 @@ class _QuickCaptureSheetState extends ConsumerState<_QuickCaptureSheet> {
         }
       } on ProblemException catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      } on Object catch (e) {
+        // Offline: queue it for replay when the connection returns (FEATURES-50 #46).
+        if (Net.isNetworkError(e)) {
+          await Outbox.enqueue({'type': 'quickAdd', 'text': title});
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Offline — queued, will send when you reconnect')));
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        }
       }
       return;
     }
@@ -543,6 +577,39 @@ class _QuickCaptureSheetState extends ConsumerState<_QuickCaptureSheet> {
           ),
         ]),
       ]),
+    );
+  }
+}
+/// A slim bar shown while the app can't reach the server (FEATURES-50 #46). Actions
+/// taken offline are queued and replayed automatically when the connection returns.
+class _OfflineBar extends StatelessWidget {
+  const _OfflineBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: Net.offline,
+      builder: (context, offline, _) {
+        if (!offline) return const SizedBox.shrink();
+        final scheme = Theme.of(context).colorScheme;
+        return Material(
+          color: scheme.errorContainer,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                Icon(Icons.cloud_off, size: 18, color: scheme.onErrorContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Offline — changes are queued and will sync when you reconnect',
+                      style: TextStyle(color: scheme.onErrorContainer, fontSize: 12)),
+                ),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
 }
