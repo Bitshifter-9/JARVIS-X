@@ -1,0 +1,101 @@
+# Production: one VM, one image, three processes, Postgres beside them, Caddy in front.
+#
+#   cp .env.example .env   # fill it in; JARVIS_DOMAIN and JARVIS_BASE_URL must match
+#   docker compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --build
+#
+# Caddy issues the TLS certificate for JARVIS_DOMAIN on first request. Port 443 is the
+# only inbound port; the Mac helper and the phone dial out to it.
+name: jarvis
+
+x-app: &app
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  image: jarvis-x:latest
+  env_file: ../../.env
+  environment:
+    JARVIS_ENV: cloud
+    JARVIS_DATABASE_URL: postgresql+asyncpg://jarvis:${POSTGRES_PASSWORD:-jarvis}@postgres:5432/jarvis
+    JARVIS_BASE_URL: https://${JARVIS_DOMAIN:?set JARVIS_DOMAIN in .env}
+    JARVIS_OAUTH_ISSUER: https://${JARVIS_DOMAIN}
+  volumes:
+    - artifacts:/app/var
+    - models:/root/.cache          # fastembed + faster-whisper weights, downloaded once
+    - ../../secrets:/app/secrets:ro  # service-account files the deploy script ships
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jarvis}
+      POSTGRES_DB: jarvis
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose: ["8000"]
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "jarvis.workers.main"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *app
+    command: ["python", "-m", "jarvis.workers.scheduler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Optional and heavy. Off by default; start it with:
+  #   docker compose --env-file .env -f infra/compose/docker-compose.prod.yml --profile video up -d
+  video-worker:
+    <<: *app
+    profiles: ["video"]
+    command: ["python", "-m", "jarvis.workers.video"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      JARVIS_DOMAIN: ${JARVIS_DOMAIN}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  artifacts:
+  models:
+  caddy_data:
+  caddy_config:

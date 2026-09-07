@@ -23,4 +23,28 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
 }
 
+// porcupine_flutter still declares compileSdk 31 while its own dependencies need 34+.
+// Lift every plugin module to this app's compileSdk. Registered from settings so the
+// afterEvaluate hook exists before Flutter's plugin loader evaluates the modules (a root
+// build-script `subprojects { afterEvaluate }` arrives too late and is refused). Done by
+// reflection because AGP's classes are not on the settings classpath.
+gradle.beforeProject {
+    afterEvaluate {
+        if (path != ":app") {
+            val android = extensions.findByName("android")
+            if (android != null) {
+                val current = runCatching {
+                    android.javaClass.getMethod("getCompileSdk").invoke(android) as? Int
+                }.getOrNull()
+                if (current == null || current < 36) {
+                    runCatching {
+                        android.javaClass.getMethod("setCompileSdk", Int::class.javaObjectType)
+                            .invoke(android, 36)
+                    }
+                }
+            }
+        }
+    }
+}
+
 include(":app")

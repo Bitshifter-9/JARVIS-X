@@ -6,6 +6,7 @@ signed (blueprint §12).
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -13,6 +14,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from jarvis.api.deps import CurrentUser, SessionDep
+from jarvis.core.config import get_settings
 from jarvis.core.ids import new_id
 from jarvis.core.logging import get_logger
 from jarvis.core.security import decode_access_token
@@ -141,9 +143,19 @@ async def device_socket(websocket: WebSocket, token: str, device_id: str) -> Non
             ],
         })
 
+    # Delivery, not just announcement. The executor addresses a Tier-B action to this
+    # device from another process; every few seconds this socket looks for one and sends
+    # the signed envelope. Waiting on receive alone would leave a queued job undelivered
+    # until the helper happened to say something.
     try:
         while True:
-            message = await websocket.receive_json()
+            try:
+                message = await asyncio.wait_for(
+                    websocket.receive_json(), timeout=DISPATCH_POLL_SECONDS
+                )
+            except TimeoutError:
+                await _push_dispatchable(websocket, device_uuid)
+                continue
             await _handle_device_message(device_uuid, connection_id, message)
     except WebSocketDisconnect:
         pass
@@ -151,6 +163,40 @@ async def device_socket(websocket: WebSocket, token: str, device_id: str) -> Non
         async with session_scope() as session:
             await DeviceService(session).disconnect(device_uuid, connection_id)
         log.info("device_disconnected", device_id=device_id)
+
+
+DISPATCH_POLL_SECONDS = 3.0
+
+
+async def _push_dispatchable(websocket: WebSocket, device_id: uuid.UUID) -> None:
+    """Send every action the executor has addressed here and nobody has delivered yet."""
+    from sqlalchemy import select
+
+    from jarvis.db.models.agent import Action, ActionStatus
+    from jarvis.services.device.service import server_signing_key
+
+    async with session_scope() as session:
+        devices = DeviceService(session)
+        waiting = (
+            await session.scalars(
+                select(Action)
+                .where(
+                    Action.device_id == device_id,
+                    Action.status == ActionStatus.DISPATCHED.value,
+                    # ``result.job_id`` is written by build_envelope: its absence is the
+                    # mark of a job that has not been sent.
+                    Action.result.is_(None) | Action.result["job_id"].astext.is_(None),
+                )
+                .order_by(Action.created_at)
+                .limit(5)
+            )
+        ).all()
+        for action in waiting:
+            envelope = await devices.build_envelope(action, server_private_pem=server_signing_key())
+            await websocket.send_json(
+                {"type": MessageType.JOB_DISPATCH.value, **envelope.to_wire()}
+            )
+            log.info("device_job_pushed", action_id=str(action.id), tool=action.tool)
 
 
 async def _handle_device_message(
@@ -190,7 +236,7 @@ async def _handle_device_message(
                 log.warning("device_result_unknown_job", job_id=result.job_id)
                 return
 
-            await EvidenceService(session).verify(action, result.observed)
+            await complete_device_action(session, action, result.observed or {})
 
 
 async def _device_out(devices: DeviceService, device) -> DeviceOut:  # noqa: ANN001
@@ -218,3 +264,207 @@ async def server_public_key(_user: CurrentUser) -> dict[str, str]:
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode()
     return {"public_key_pem": public_pem}
+
+
+async def complete_device_action(session, action, observed: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN001
+    """What happens when a device reports back: the verdict, the artifact to Telegram,
+    and — for the eyes (PLAN.md 10.7) — one description of what was captured."""
+    from jarvis.db.models.ops import Artifact, AuditLog
+    from jarvis.services.vision import VISION_TOOLS, describe_artifact
+
+    outcome = await EvidenceService(session).verify(action, observed)
+    artifact_id = observed.get("artifact_id")
+    if not artifact_id:
+        return {"verdict": outcome.verdict.value}
+    description = None
+    if action.tool in VISION_TOOLS:
+        try:
+            artifact = await session.get(Artifact, uuid.UUID(str(artifact_id)))
+        except ValueError:
+            artifact = None
+        if artifact is not None and artifact.user_id == action.user_id:
+            description = await describe_artifact(
+                session, action.user_id, artifact, (action.args or {}).get("question")
+            )
+            session.add(
+                AuditLog(
+                    user_id=action.user_id,
+                    actor="system",
+                    action="vision.described",
+                    subject_type="action",
+                    subject_id=str(action.id),
+                    detail={
+                        "tool": action.tool,
+                        "artifact_id": str(artifact.id),
+                        "text": description,
+                    },
+                    correlation_id=action.correlation_id,
+                )
+            )
+            await session.flush()
+            await _tell_owner(session, action.user_id, description)
+    await deliver_artifact(session, action, str(artifact_id), caption=description)
+    return {"verdict": outcome.verdict.value, "description": description}
+
+
+async def _tell_owner(session, user_id, text: str) -> None:  # noqa: ANN001
+    from jarvis.services.notification import NotificationService
+    from jarvis.workers.notify import build_senders
+
+    try:
+        await NotificationService(session, senders=build_senders(session)).notify(
+            user_id, title="Jarvis looked", body=text[:400]
+        )
+    except Exception as exc:  # noqa: BLE001 — the description is already recorded
+        log.warning("vision_notify_failed", error=str(exc)[:120])
+
+
+async def deliver_artifact(
+    session, action, artifact_id: str, *, telegram=None, caption: str | None = None
+) -> bool:  # noqa: ANN001
+    """Send a screenshot or file the Mac produced to the owner's Telegram chat.
+
+    The app's Timeline shows every artifact regardless; Telegram is the push. Only the
+    owner's *linked* chat is ever a destination — an artifact is the most sensitive
+    thing this system moves, and a recipient it never verified is not one it will use.
+    """
+    from sqlalchemy import select
+
+    from jarvis.db.models.identity import Identity
+    from jarvis.db.models.ops import Artifact
+
+    try:
+        artifact = await session.get(Artifact, uuid.UUID(artifact_id))
+    except ValueError:
+        return False
+    if artifact is None or artifact.user_id != action.user_id:
+        log.warning("artifact_delivery_refused", artifact_id=artifact_id)
+        return False
+
+    identity = await session.scalar(
+        select(Identity).where(
+            Identity.user_id == action.user_id, Identity.provider == "telegram",
+            Identity.revoked_at.is_(None),
+        )
+    )
+    settings = get_settings()
+    chat_id = identity.subject if identity else settings.telegram_owner_chat_id
+    if not chat_id:
+        return False
+    if telegram is None:
+        if not settings.telegram_bot_token:
+            return False
+        from jarvis.connectors.telegram.client import TelegramClient
+
+        telegram = TelegramClient(settings.telegram_bot_token)
+    try:
+        await telegram.send_file(
+            chat_id, artifact.path,
+            caption=(caption or f"{action.tool} · {artifact.filename}")[:1000],
+            as_photo=artifact.content_type.startswith("image/"),
+        )
+    except Exception as exc:  # noqa: BLE001 — the artifact is stored either way
+        log.warning("artifact_delivery_failed", error=str(exc)[:200])
+        return False
+    artifact.delivered_to = {**(artifact.delivered_to or {}), "telegram": chat_id}
+    await session.flush()
+    return True
+
+
+# ── the notification mirror (PLAN.md 10.4.4) ─────────────────────────────────────────
+class MirroredNotification(BaseModel):
+    package: str = Field(max_length=200)
+    app: str = Field(default="", max_length=120)
+    title: str = Field(default="", max_length=300)
+    # Empty unless the owner allowed bodies for this app on the phone.
+    text: str = Field(default="", max_length=2000)
+    at: str | None = None
+    key: str | None = Field(default=None, max_length=200)
+
+
+@router.post("/{device_id}/notifications", status_code=202)
+async def mirror_notifications(
+    device_id: uuid.UUID,
+    body: list[MirroredNotification],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, Any]:
+    """A paired phone forwards notification titles (opt-in, app-allowlisted on the
+    phone). Each becomes an untrusted ``phone`` event — so a routine can say "when a
+    WhatsApp from Amma arrives…" — and nothing else: no triage, no model call."""
+    import hashlib
+    from datetime import UTC, datetime
+
+    from jarvis.core.correlation import ensure_correlation_id
+    from jarvis.core.errors import Forbidden
+    from jarvis.services.event import EventService
+    from jarvis.services.event.envelope import EventEnvelope, EventSource, EventType, Trust
+    from jarvis.services.routines import RoutineService
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+
+    events, routines = EventService(session), RoutineService(session)
+    new = 0
+    for n in body[:100]:
+        digest = hashlib.sha256(f"{n.package}|{n.title}|{n.text}".encode()).hexdigest()[:12]
+        object_id = n.key or f"{n.package}:{n.at or ''}:{digest}"
+        try:
+            occurred = datetime.fromisoformat(n.at) if n.at else datetime.now(UTC)
+        except ValueError:
+            occurred = datetime.now(UTC)
+        author = n.app or n.package
+        result = await events.ingest(
+            EventEnvelope(
+                event_type=EventType.SOURCE_MESSAGE_CHANGED,
+                occurred_at=occurred,
+                tenant_id=user.id,
+                source=EventSource(provider="phone", object_id=object_id),
+                correlation_id=ensure_correlation_id(),
+                trust=Trust.UNTRUSTED,
+                payload={
+                    "kind": "notification",
+                    "title": n.title,
+                    "text": n.text or n.title,
+                    "author": author,
+                    "package": n.package,
+                },
+            )
+        )
+        if result.duplicate:
+            continue
+        new += 1
+        await routines.on_message(
+            user.id, provider="phone", author=author, title=n.title, body=n.text
+        )
+    return {"received": len(body), "new": new}
+
+
+# ── the activity sampler (PLAN.md 10.6.3) ────────────────────────────────────────────
+class ActivityIn(BaseModel):
+    app: str = Field(max_length=200)
+    title: str | None = Field(default=None, max_length=300)
+    at: str | None = None
+
+
+@router.post("/{device_id}/activity", status_code=202)
+async def post_activity(
+    device_id: uuid.UUID, body: list[ActivityIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """A paired device reports what was in front of the owner: app and title, never
+    pixels. Opt-in on the device; 30 days; the focus guard and "what was I doing" read it."""
+    from jarvis.core.errors import Forbidden
+    from jarvis.services.activity import record
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+    stored = await record(
+        session,
+        user.id,
+        device_id=device.id,
+        platform=device.platform,
+        samples=[s.model_dump() for s in body],
+    )
+    return {"stored": stored}

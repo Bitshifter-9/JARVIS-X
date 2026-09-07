@@ -1,0 +1,9 @@
+# Automatic HTTPS for the domain in .env. One upstream; WebSockets pass through as-is.
+{$JARVIS_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy api:8000
+    # Uploads from the Mac (screenshots, files) can be large.
+    request_body {
+        max_size 64MB
+    }
+}

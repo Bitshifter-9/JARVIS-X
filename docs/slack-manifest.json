@@ -1,0 +1,30 @@
+{
+  "display_information": {
+    "name": "JARVIS X",
+    "description": "Turns deadlines in your Slack into tracked tasks; posts only after you approve.",
+    "background_color": "#0f1621"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "JARVIS X",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "channels:history",
+        "groups:history",
+        "im:history",
+        "channels:read",
+        "users:read"
+      ]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

@@ -150,7 +150,7 @@ class TelegramService:
         """
         callback = update.get("callback_query")
         if not callback:
-            return CallbackOutcome(handled=False, text="")
+            return await self._handle_text(update.get("message") or {})
 
         chat_id = str(callback.get("message", {}).get("chat", {}).get("id", ""))
         data = str(callback.get("data", ""))
@@ -170,6 +170,73 @@ class TelegramService:
 
         await self._answer(callback_id, "Unsupported action.")
         return CallbackOutcome(handled=False, text="unsupported")
+
+    async def _handle_text(self, message: dict[str, Any]) -> CallbackOutcome:
+        """Free text from a *linked* chat becomes an agent run.
+
+        Phase 1 refused free text because interpreting untrusted input is what the
+        policy boundary keeps away from effects. That still holds — for strangers. A
+        message from the chat the owner linked is the owner typing, exactly as the app's
+        chat box is, so it is trusted input; the run it starts still stops at policy,
+        and anything effectful still comes back as an approval card.
+        """
+        text = str(message.get("text") or "").strip()
+        chat_id = str((message.get("chat") or {}).get("id", ""))
+        if not text or not chat_id or text.startswith("/start"):
+            if chat_id and text.startswith("/start"):
+                await self.transport.call(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": (
+                            "Hi — I am JARVIS.\n\nTo let me act on your account, open "
+                            "JARVIS X → Connections → Link Telegram and enter this chat "
+                            f"id:\n\n{chat_id}\n\nThen just talk to me here: \"what is "
+                            "due today?\", \"screenshot my Mac\", \"ring my phone\"."
+                        ),
+                    },
+                )
+            return CallbackOutcome(handled=False, text="")
+
+        user_id = await self.user_for_chat(chat_id)
+        if user_id is None:
+            # Never leave a real message unanswered: tell them exactly how to link.
+            log.warning("telegram_unmapped_chat", chat_id=chat_id)
+            await self.transport.call(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": (
+                        "This chat is not linked yet. Open JARVIS X → Connections → "
+                        f"Link Telegram, and enter this chat id:\n\n{chat_id}\n\n"
+                        "Then message me again and I will act on it."
+                    ),
+                },
+            )
+            return CallbackOutcome(handled=False, text="unlinked chat")
+
+        from jarvis.db.queue import JOB_PRIORITY, JobQueue
+
+        job = await JobQueue(self.session).enqueue(
+            "agent.run",
+            {
+                "user_id": str(user_id),
+                "text": text[:8000],
+                "source": "telegram",
+                "trust": "trusted",
+                "trigger": "telegram",
+                "reply_to": {"channel": PROVIDER, "address": chat_id},
+            },
+            user_id=user_id,
+            priority=JOB_PRIORITY["interactive"],
+            # One run per Telegram message, however often Telegram redelivers it.
+            idempotency_key=f"tg:{chat_id}:{message.get('message_id', '')}",
+            max_attempts=2,
+        )
+        await self.transport.call("sendChatAction", {"chat_id": chat_id, "action": "typing"})
+        return CallbackOutcome(handled=True, text="queued", approval_id=None) if job else (
+            CallbackOutcome(handled=False, text="duplicate")
+        )
 
     async def _decide(
         self, user_id: uuid.UUID, chat_id: str, callback_id: str, data: str

@@ -9,7 +9,7 @@ Build plan for the *JARVIS X Advanced Architecture and Implementation Blueprint*
 | **Every feature in the PDF ships** | Full coverage matrix in §2. Nothing is silently dropped; where the PDF itself says *defer* or *do not build*, we honour that and say so. |
 | **Cloud-first — must work with the Mac offline** | The Mac is an **optional execution node**, never a dependency. Inference, ingestion, prediction, scheduling, escalation and approval all run in the cloud. §3. |
 | **Budget ≈ ₹2,000/month (~$24)** | Free tiers by default, paid fallback wired up behind a hard cap. Realistic spend ₹0–700/mo. §14. |
-| **No iOS** | Android is the only phone. Live Activity → Android ongoing notification + widget. Contracts stay iOS-ready. |
+| **No iOS** | Android is the only phone. Live Activity → Android ongoing notification + widget. Contracts stay iOS-ready. |https://mcp.openart.ai/mcp
 
 **Product sentence, unchanged:** JARVIS X observes commitments, predicts failure, prepares the next best
 action, executes through policy-controlled tools, verifies the result, and escalates only when the user has
@@ -56,8 +56,8 @@ deployment change, not a rewrite. Substitutions are marked ⇄ and justified in 
 | 1 | Event-driven backend supporting long-running work | ✅ Full ⇄ Postgres queue instead of SQS | `jarvis/workers` |
 | 1 | Relational data + vector memory in one database | ✅ Full | Postgres 16 + `pgvector` |
 | 1 | Mobile as control/approval/notification surface | ✅ Full | `apps/mobile` |
-| 1 | Alexa custom skill with account linking | ✅ Full | `apps/alexa-skill` — Phase 4 |
-| 1 | OpenClaw as isolated channel adapter | ✅ Full | `POST /internal/connectors/openclaw/events` — Phase 5 |
+| 1 | Alexa custom skill with account linking | ✅ Full ⇄ HTTPS endpoint instead of Lambda | `apps/alexa-skill` + `jarvis/connectors/alexa` |
+| 1 | OpenClaw as isolated channel adapter | ✅ Full | `POST /internal/connectors/openclaw/events` |
 | 2 | Four planes, trust boundaries, untrusted-content rule | ✅ Full | `docs/ARCHITECTURE.md`, `docs/THREAT-MODEL.md` |
 | 3 | Canonical event envelope + idempotency + DLQ + reconciliation | ✅ Full ⇄ Postgres `jobs` table | `jarvis/db/queue.py` |
 | 3 | All five event classes | ✅ Full | §7 |
@@ -81,17 +81,17 @@ deployment change, not a rewrite. Substitutions are marked ⇄ and justified in 
 | 13 | Android app: Today · Goals · Chat · Approvals · Timeline · Devices · Connectors | ✅ Full | `apps/mobile` |
 | 14 | Push, background sync, exact alarm, break-through-Focus | ✅ Full (Android) | FCM + WorkManager + AlarmManager |
 | 14 | Live deadline card | ✅ Full ⇄ Android ongoing notification + Glance widget instead of ActivityKit | Phase 3 |
-| 15 | Alexa: 7 intents + account linking | ✅ Full | Phase 4 |
-| 16 | ASK SDK Lambda, reminders, proactive events, certification | ✅ Full | Phase 4 |
+| 15 | Alexa: 7 intents + account linking | ✅ Full | `jarvis/connectors/alexa/skill.py` |
+| 16 | ASK SDK Lambda, reminders, proactive events, certification | ✅ Full ⇄ HTTPS endpoint; reminders and proactive events documented, not enabled | `apps/alexa-skill/README.md` |
 | 17 | Gmail | ✅ Full | Phase 2 |
 | 17 | Google Calendar | ✅ Full | Phase 2 |
-| 17 | Slack | ✅ Full | Phase 5 |
-| 17 | Google Classroom | ✅ Full | Phase 5 |
-| 17 | Canvas / Moodle LMS | ✅ Full — Canvas free teacher instance for demo | Phase 5 |
+| 17 | Slack | ✅ Full | `jarvis/connectors/slack` |
+| 17 | Google Classroom | ✅ Full | `jarvis/connectors/google/classroom.py` |
+| 17 | Canvas / Moodle LMS | ✅ Full — Canvas free teacher instance for demo | `jarvis/connectors/canvas` |
 | 17 | Telegram | ✅ Full | Phase 1 |
-| 17 | WhatsApp Cloud API templates | ✅ Full | Phase 5 — see §13 risk |
-| 17 | Outbound phone call | ✅ Full ⇄ Twilio instead of Amazon Connect | Phase 5 — see §13 risk |
-| 18 | OpenClaw adapter, isolated, no DB credentials | ✅ Full | Phase 5 |
+| 17 | WhatsApp Cloud API templates | ✅ Full | `jarvis/connectors/whatsapp` — see §13 risk |
+| 17 | Outbound phone call | ✅ Full ⇄ Twilio instead of Amazon Connect | `jarvis/connectors/twilio` — see §13 risk |
+| 18 | OpenClaw adapter, isolated, no DB credentials | ✅ Full | `api/routes/internal.py` |
 | 19 | Monorepo, 8 backend service modules | ✅ Full ⇄ one container, three entrypoints, same module boundaries | §6 |
 | 20 | Full relational schema + indexes | ✅ Full | §7 |
 | 21 | REST + SSE + WebSocket contracts, idempotency, problem objects, generated clients | ✅ Full | `packages/contracts` |
@@ -238,6 +238,7 @@ is not evidence, so the gates in §12 stay hand-written.
 | LLM transport | Bedrock SDK | **LiteLLM** behind our cascade | One interface, 100+ providers, native structured output. |
 | LLM providers | Bedrock | **Groq + Gemini + OpenRouter** | §4. |
 | Mac automation | Swift + Pigeon | **Python + PyObjC** | Identical Apple APIs (`NSWorkspace`, `AXUIElement`, `CGWindowList`), no Xcode required. Swift is a *packaging* concern for a signed `.app`, not a capability one. |
+| Alexa skill | ASK SDK Lambda | **HTTPS endpoint on the API we already run** | Alexa accepts either. Removes a second language, a second deployment and an AWS account; request authenticity moves into `connectors/alexa/verify.py`. |
 | IaC | AWS CDK | **Docker Compose + Caddyfile** | One VM. CDK would be ceremony. |
 
 **Migration path, documented:** each substitution above maps 1:1 to its AWS service, and the module boundaries
@@ -264,9 +265,9 @@ JARVIS-X/
 │   │   ├── services/     event · goal · agent · policy · tool_gateway ·
 │   │   │                 evidence · notification · identity · memory · graph · browser
 │   │   ├── llm/          router · groq · gemini · openrouter · ollama · budget
-│   │   ├── connectors/   gmail · calendar · slack · classroom · canvas ·
-│   │   │                 telegram · whatsapp · twilio · openclaw
-│   │   └── workers/      agent · connector · scheduler · browser
+│   │   ├── connectors/   google/{gmail · calendar · classroom · youtube} · slack ·
+│   │   │                 canvas · telegram · whatsapp · twilio · alexa · openclaw
+│   │   └── workers/      scheduler · notify · video · browser
 │   ├── mac-node/         PyObjC helper — tools/ verify/ transport/
 │   ├── control_center/   Flutter macOS
 │   ├── mobile/           Flutter Android
@@ -409,6 +410,12 @@ cost. A judge flips `SIMULATE → EXECUTE` on the *same hashed plan*. Highest de
 local jobs and drops the socket; Android emergency revokes device sessions. **None delete evidence** — each
 records who invoked it and why.
 
+**The agent card is generated from the policy table.** `/.well-known/agent-card.json` publishes an A2A
+descriptor of what JARVIS can be asked to do — and it lists **only R0 and R1**, built from `RULES` at request
+time. A hand-written card drifts away from what the system actually permits, and a card that overstates the
+system is a lie another machine will act on. Discovery only: there is no JSON-RPC task endpoint, and no card
+can grant a capability — everything above R1 still stops at a human.
+
 ---
 
 ## 11. Device pairing and job protocol
@@ -432,6 +439,20 @@ reports the expected bundle id frontmost *and* `NSRunningApplication` confirms t
 ## 12. Phased build
 
 Phases end on **exit tests**, not calendar dates.
+
+**Everything that can be built has been built.** What remains is not code — it is six
+things this machine or an account cannot currently supply:
+
+| Item | Blocked on | Unblock |
+|---|---|---|
+| 2.3 live extraction accuracy | A working **Groq** key (Gemini works) | Reissue it; the harness and 30 fixtures are committed and self-verifying |
+| 2.8 FCM push | A Firebase project | `docs/SETUP.md` Step 5. **The toolchain is no longer the blocker** — Flutter builds a release APK on this machine |
+| 3.3 Android live card · 3.6 voice | A device to verify against | Both are client work, unbuilt. An ongoing notification and an exact alarm need no Firebase; the Glance widget is Kotlin |
+| 3.1 macOS menu-bar extra | — | The Flutter macOS target and every screen exist; only the menu-bar item and its STOP are missing |
+| 4.4 Alexa reminders · 4.5 certification | An Amazon developer account | Upload `apps/alexa-skill/interaction-model.json`, point the endpoint at `/alexa` |
+| 5.x live provider runs | Slack app · Meta template approval (24–48h) · Twilio caller id · Canvas token | Account work; each connector is already tested against its own boundary |
+| 6.4 macOS signing | An Apple Developer ID | Everything else in CI is green |
+| 7.x burned captions · lip-sync | `ffmpeg-full` (core ffmpeg has no `libass`) and a SadTalker/Wav2Lip CLI | `JARVIS_FFMPEG_PATH`, `JARVIS_YOUTUBE_LIPSYNC_CMD` |
 
 ### Phase 0 — Foundation ✅ complete — 47 tests green
 
@@ -474,55 +495,169 @@ Phases end on **exit tests**, not calendar dates.
 | 2.4 | ✅ Google Calendar read → `fixed_calendar_blocks` | Overlapping meetings merged, spans clipped to the window |
 | 2.5 | ✅ Escalation chain + quiet hours + per-day cap | **An ignored alert escalates exactly once**; quiet hours defer rather than drop |
 | 2.6 | ✅ Memory tiers + hybrid SQL→vector retrieval | **Citations returned, credential-shaped content refused at write**; corrections supersede |
-| 2.7 | ✅ Flutter app: Today · Goals · Approvals · Devices + kill switch | **Verified in a real browser**: sign-in → goals → prediction, risk card rendered from live rows. Android build needs `cmdline-tools`; web is the dev surface |
-| 2.8 | ⬜ FCM push + WorkManager + AlarmManager exact alarm | Needs an Android build first |
+| 2.7 | ✅ Flutter app: Today · Goals · Approvals · Devices + kill switch | **Verified in a real browser**: sign-in → goals → prediction, risk card rendered from live rows. A release APK and a macOS `.app` both build now |
+| 2.8 | ⬜ FCM push + WorkManager + AlarmManager exact alarm | Blocked on a Firebase project, no longer on the build — `flutter build apk` succeeds here |
 | 2.9 | ✅ Hypothesis invariants + Schemathesis spec validation | **Found a real bug**: the Telegram webhook returned 500 unconfigured, which would have caused a retry storm |
 
-### Phase 3 — Desktop, graph, modules — 🚧 3 of 6 (3.1/3.3 need Xcode and the Android SDK)
+### Phase 3 — Desktop, graph, modules — 🚧 3 of 6 · Xcode and the Android SDK are working now; what is left is client work
 
 | # | Task | Exit test |
 |---|---|---|
-| 3.1 | Flutter macOS Control Center + menu bar + kill switch | Chat, deadline board, timeline, approval cards, STOP |
+| 3.1 | 🚧 Flutter macOS Control Center + menu bar + kill switch | macOS target builds and ships to `/Applications`; Chat, Today, Approvals, Devices and the kill switch are in the app. **The menu-bar extra is not built** |
 | 3.2 | ✅ Mac node full tool set: AX automation, window/screen evidence, scoped files, templates | Capture returns a **digest, not pixels**; a revoked permission is reported rather than read as "not there"; file access cannot escape its granted directory |
-| 3.3 | Android live deadline card: ongoing notification + Glance widget | Remaining time + completion probability + Acknowledge / Snooze / Start Focus |
+| 3.3 | ⬜ Android live deadline card: ongoing notification + Glance widget | Remaining time + completion probability + Acknowledge / Snooze / Start Focus. Unbuilt — needs a device to verify against, not a toolchain |
 | 3.4 | ✅ Knowledge graph (visualization deferred to the Flutter surface) | **"Why do you believe this?" resolves to a source**; corroboration raises confidence but never reaches certainty; retraction leaves a trace |
 | 3.5 | ✅ Morning / evening / focus modules | Views over the shared goal engine; the first hour goes to the **critical path**, not the nearest deadline |
-| 3.6 | Voice on the Mac: Whisper + Piper, push-to-talk, visible indicator | Ported from v1, with an indicator |
+| 3.6 | ⬜ Voice on the Mac: Whisper + Piper, push-to-talk, visible indicator | Ported from v1, with an indicator |
 
-### Phase 4 — Alexa
-
-| # | Task | Exit test |
-|---|---|---|
-| 4.1 | Skill model: 7 intents, slots, utterances, en-IN | Model builds; simulator resolves each intent |
-| 4.2 | ASK SDK Lambda, skill-ID restriction, interceptors | Only our skill id is accepted |
-| 4.3 | Account linking against our OAuth2 server | Link, call an authorized intent, unlink |
-| 4.4 | Reminders (per-reminder consent) + Proactive Events | Consent flow honoured; daily caps respected |
-| 4.5 | Privacy policy, terms, certification checklist | Certification checklist passes |
-
-### Phase 5 — Remaining connectors
+### Phase 4 — Alexa — ✅ code complete, 34 tests green (console work needs a developer account)
 
 | # | Task | Exit test |
 |---|---|---|
-| 5.1 | Slack Events API + `chat.postMessage` after approval | Signing secret verified; send requires approval |
-| 5.2 | Google Classroom read | Coursework deadline creates a task |
-| 5.3 | Canvas LMS read (free teacher instance for the demo) | Assignment deadline creates a task |
-| 5.4 | WhatsApp Cloud API approved template | Template alert delivered |
-| 5.5 | Twilio outbound call as final escalation | Call placed once, capped, opt-in, logged |
-| 5.6 | OpenClaw adapter, isolated, narrow service identity | OpenClaw event → action card; **no DB credentials in that container** |
+| 4.1 | ✅ Skill model: 7 intents, slots, utterances, en-IN | `apps/alexa-skill/interaction-model.json`. **The model and the dispatch table cannot drift** — a test fails if an intent exists on one side only, and if any custom intent has no utterance |
+| 4.2 | ✅ HTTPS endpoint ⇄ *instead of an ASK SDK Lambda*, skill-ID restriction, signature + timestamp verification | **A forged certificate URL, a tampered body, a certificate not issued for `echo-api.amazon.com`, an expired certificate, a replayed timestamp and another developer's skill id are each refused** |
+| 4.3 | ✅ Account linking against our own OAuth2 server | **Unlinked → LinkAccount card and no data**; a forged access token links nothing; a linked token reaches the same services the app uses |
+| 4.4 | ⬜ Reminders (per-reminder consent) + Proactive Events | Blocked on an Amazon developer account. Both flows written up in `apps/alexa-skill/README.md`; the escalation ladder never depended on Alexa |
+| 4.5 | 🚧 Privacy policy, terms, certification checklist | Checklist committed; certification itself needs the developer console. **Approving by voice needs Alexa's confirmation turn, and an R3 that needs a local Mac confirmation is refused out loud** |
 
-### Phase 6 — Credibility — 🚧 4 of 5 complete, 500 tests green
+> **Substitution, and why:** Alexa accepts either a Lambda or an HTTPS endpoint. Serving
+> the skill from the API we already run removes a second language, a second deployment and
+> an AWS account from the critical path. What the ASK SDK would have given us for free —
+> request authenticity — is `connectors/alexa/verify.py`, and it is tested with a real key
+> pair rather than a mock.
+
+### Phase 5 — Remaining connectors — ✅ code complete, 47 tests green (live credentials pending)
+
+| # | Task | Exit test |
+|---|---|---|
+| 5.1 | ✅ Slack Events API + `chat.postMessage` after approval | **The signature is checked over the raw body, before anything parses it**; a replay expires although its signature never does; the `url_verification` challenge is answered only after that check; a message from an unlinked Slack user stores nothing. Sending is R2 and needs an approval |
+| 5.2 | ✅ Google Classroom read | Coursework → task. **A whole-day deadline lands at 23:59, not midnight** — the naive reading fires every reminder a day early |
+| 5.3 | ✅ Canvas LMS read (free teacher instance for the demo) | Assignment → task. **A base URL pointing inside the host network is refused** — connector configuration is a request-forgery vector |
+| 5.4 | ✅ WhatsApp Cloud API approved template | The body is a fixed sentence with named parameters, so an untrusted title cannot become instructions; newlines are collapsed because Meta rejects them |
+| 5.5 | ✅ Twilio outbound call as final escalation | Placed **once** (one rung per attempt), **capped** (`max_calls_per_day`, enforced before a sender is reached), **opt-in** (an enabled endpoint row), **logged** (`notification.sent`). The spoken script escapes an injected `<Say>` |
+| 5.6 | ✅ OpenClaw adapter, isolated, narrow service identity | **No DB credentials in that container** — it holds one shared secret that buys the right to post an *untrusted* event and nothing else. An unset secret denies rather than opens the route |
+| 5.7 | ✅ Escalation worker draining `schedule.escalate` | **The rung is derived from what was already sent**, so a redelivered job cannot restart the ladder at rung 0 and shout through every channel again. An unconfigured channel is absent, so the ladder falls through instead of crashing |
+
+> Every connector above is exercised against fixtures and its own security boundary. What
+> is *not* proven without live credentials is the provider's own behaviour: a real Slack
+> workspace, an approved WhatsApp template, a verified Twilio caller id, a Canvas token.
+> Those are account tasks, not code tasks — §13 lists the lead times.
+
+### Phase 6 — Credibility — 🚧 4 of 5 complete · **613 tests green across the whole suite**
 
 | # | Task | Exit test |
 |---|---|---|
 | 6.1 | ✅ Adversarial: injection, replay, expired job, scope violation, storm | **12 attack shapes × a fully compromised planner → zero effectful actions**; 46 tests |
 | 6.2 | ✅ Chaos: outage, worker death, thundering herd, redelivery, stale schedule, disconnect | **Known failures repair once or stop clearly**; 15 tests |
 | 6.3 | ✅ Metrics scorecard vs. §15 targets | **All seven measured from what happened**; an unmeasured metric says so rather than reporting 100% |
-| 6.4 | 🚧 GitHub Actions (backend · Flutter · contracts) | Runs lint, migrations, full suite on real Postgres + Chromium, and fails on a stale OpenAPI. macOS signing needs a Developer ID |
+| 6.4 | 🚧 GitHub Actions (backend · Flutter · contracts) | Runs lint, migrations, the full suite on real Postgres + Chromium, and fails on a stale OpenAPI, a leaked value in `.env.example` or an uncommitted package. **Blocked only on macOS signing, which needs a Developer ID** |
 | 6.5 | ✅ DEMO CLOCK + one-click reset + **rehearsed** | **All 13 beats pass, twice**, on the real scheduler path; reset clears the demo tenant only |
 
-**If time slips, cut in this order:** OpenClaw → Canvas/Moodle → WhatsApp → phone call → knowledge-graph
-*visualization* → Alexa reminders.
+**If time slips, cut in this order:** the video pipeline → OpenClaw → Canvas/Moodle → WhatsApp →
+phone call → knowledge-graph *visualization* → Alexa reminders.
 **Never cut:** verified execution · failure prediction · approval workflow · audit timeline.
+
+### Phase 7 — the video pipeline — ✅ working, 22 tests green · *beyond the blueprint*
+
+Not in the PDF. It earns its place by being the loudest possible demonstration that the
+**same** queue, policy ladder, approval binding and evidence rules govern a long, expensive,
+externally-visible job — not just a two-second email send.
+
+| # | Task | Exit test |
+|---|---|---|
+| 7.1 | ✅ Research → script → speech → captions → imagery → render, as queued jobs | A render is a `jobs` row with retries and a DLQ, like everything else |
+| 7.2 | ✅ `youtube.upload` and `youtube.reply` are R2 | **Neither can run without a valid, unexpired, matching approval**; the approval card carries the rendered file |
+| 7.3 | ✅ A script assembled from untrusted research cannot upload itself | **An upload proposed from untrusted content is denied**, exactly as an emailed command is |
+| 7.4 | ✅ Free-tier by default | edge-tts for speech, DuckDuckGo for research, local SDXL or a keyless image endpoint for imagery, ffmpeg for the render |
+
+> **Machine-local blockers (not code):** Homebrew's core ffmpeg ships without `libass`, so
+> burned captions need `ffmpeg-full` (`JARVIS_FFMPEG_PATH`); lip-sync needs a SadTalker or
+> Wav2Lip CLI wired through `JARVIS_YOUTUBE_LIPSYNC_CMD`.
+
+---
+
+### Phase 11 — Gemini's expanded matrix, and the correctness pass the screenshots forced — ✅ built where marked
+
+The owner pasted a second Gemini plan (Open Interpreter, browser-use, Manus, Rewind,
+Computer-Use). Same treatment as §10.0½: keep what fits, name what does not and why.
+
+| Gemini proposed | Verdict | Where |
+|---|---|---|
+| Background deep research → summary emailed/texted | ✅ already: `browser.act` + a routine on *Do things* with channel Telegram/app | 10.5, 10.1 |
+| Auto-checkout, buying when the price drops, booking flights | ❌ **Never autonomous.** Anything that moves money is R4 (`payment.send`); a booking form is `browser.submit_form` R2 with the pre-submit screenshot on the card — you press the last button | §10 Safety |
+| Job applications: fill and submit | ⚠️ Fills with `browser.act`; the submit is the R2 approval per application. Auto-submitting hundreds is the thing recruiters block accounts for | 10.5.3 |
+| Screen OCR memory (Rewind-style, every screen indexed) | ❌ Still no. Titles-only activity is the line: a searchable history of everything on screen is a keylogger with a nicer name. `activity.query` answers "what was I doing at 3" | 10.6.3 |
+| Cross-device clipboard sync | ✅ **11.4** `phone.clipboard_read/write` (R1) + Mac clipboard verbs; *Paste my clipboard there* / *Send my clipboard* on Devices | this phase |
+| Semantic code/file knowledge graph of local repos | ⏸ `mac.find_files` is the scoped read; indexing repositories is a day of work and a lot of tokens; not now |
+| Face/proximity unlock; lock when you walk away | ❌ unlock (10.0¼); ⏸ lock-on-leave needs BLE ranging from the phone — later |
+| Settings toggles on both devices | ✅ 10.4.1–2, now also **from the Mac app itself** (11.1) |
+| Open Interpreter: shell from the phone by voice | ❌ `shell.execute` is R4 by design; the command templates are the typed replacement | §16 |
+| Dynamic morning alarm with weather, Slack, top tasks | ✅ 10.2.2 + 10.9.3 + **11.3 briefing mode** (the prose now comes from gathered facts) |
+| Deadline dispatcher that calls and offers to request an extension | ⚠️ The call exists (5.3 → 10.2). Offering "press 1 to draft an extension request" on that call — ⏸ next: it is one more Gather on the deadline script plus `gmail.create_draft` to the task's source author |
+| Meeting shadow (join Zoom, transcribe, action items) | ⏸ Not built: joining calls and recording audio is a separate product; the Mac helper's Whisper is the seed |
+| Focus guard: brightness, minimise, DNS block | ✅ notify → speak → lock (10.6.4). ❌ `/etc/hosts` needs sudo — a root-writing verb is R4; minimise is possible via `mac.press_key` but a nudge that hides your work is worse than a lock |
+| Dopamine budget / end-of-day screen-time debrief | ✅ the Evening review now reads today's minutes per app (`activity.summary` in the briefing context) |
+| Live camera during a call | ❌ one frame per action stays (10.7.2) |
+| Desk arrival: sit down → windows arranged, playlist on | ⏸ a *mac unlocked* event from the helper → a routine trigger with provider `mac`; not built |
+
+| # | Task | Exit test |
+|---|---|---|
+| 11.1 | ✅ **The Mac app is the Mac's hand.** The Flutter macOS app's node now answers thirteen `mac.*` verbs itself — screenshot/describe (`screencapture` → artifact), open URL/app, notify, say, volume, lock, clipboard, media, `set_setting`, `system_info` — through argv (`open`, `osascript`, `pbpaste`, `networksetup`), never a shell; same signed-job guard, scheme/bundle/setting allowlists; pairs as *This Mac*. The Python helper remains for accessibility verbs (read_ui, press_button, typing, scoped files) | ✅ Dart tests: clipboard round-trip, Wi-Fi re-read as state, `firewall` and `file:` rejected, `say` argv; a phone refuses `mac.*` |
+| 11.2 | ✅ **Deadlines you can see.** `GET /v1/tasks` (dated first) with the source of each: provider, sender, subject, link, and the exact words the date was read from. Goals tab opens with *Deadlines* (colour by urgency, Done, tap the source to open the mail); Home has a *Deadlines* panel. The audit that started it: the "Exam" task from Saritha's mail existed on the server with its evidence span and had no screen | ✅ Tests: the list carries `gmail · Saritha…`, `Meeting`, the evidence span; Done removes it; `status=all` keeps it |
+| 11.3 | ✅ **Briefing mode.** A routine that only tells you things (`mode=brief`; the built-ins) is answered by the chat model over `services/briefing.gather` — dated tasks with sources, at-risk goals, recent mail, weather, today's screen time — with a fact-only fallback when the model garbles (the first Morning briefing in production came back as a prompt fragment). *Do things* routines still run the agent | ✅ Tests: the model sees the real deadline; a garbled reply falls back to facts; built-ins fire as `brief`, customs as chosen |
+| 11.4 | ✅ Clipboard both ways (above) | ✅ |
+| 11.5 | ✅ **Correctness pass.** Expired approvals are no longer listed as pending; every tab refreshes when switched to, every 45 s while visible, and on app resume (screens live in an IndexedStack, so their providers never disposed); a rejected provider key opens the breaker for an hour instead of failing first on every call; agent jobs hold a 15-minute lease (runs were being reaped mid-flight at 5) | ✅ Tests: an expired approval vanishes from the list; Groq's rejected key cools for > 50 min while Gemini answers; the agent lease is > 10 min |
+| 11.6 | ⏸ Extension offer on the deadline call · desk-arrival trigger · lock-on-leave · meeting shadow · repo index — listed above with reasons |
+| 11.7 | ✅ **Latency and polish pass.** Every list provider is stale-while-revalidate over a disk-backed response cache (`api/cache.dart`, `shared_preferences`): a screen opens with its last data instantly and the fresh answer replaces it; the cache empties on sign-out. The API gzips anything over 1 KB. Artifact bytes are cached in memory so Timeline images do not refetch on rebuild. Shell: a 220 ms fade-and-lift on every tab switch, a pending-approvals badge on the rail and bar, ⌘1–⌘0 and ⌘K on the Mac. Home: an *Ask anything* bar that hands the text to the chat. Approvals: a draining expiry bar. Timeline: filter chips (everything · actions · runs · alerts · with files). Goals: *Add a deadline* by hand (date, time, title). Routines: a countdown to the next run. Theme: floating rounded snackbars, consistent popup, tooltip and segmented-button shapes; empty states with a soft glow | ✅ Dart test: a GET is replayed from cache before the fresh answer and forgotten on sign-out; Python test: a large response is gzipped, `identity` is honoured |
+| 11.8 | ✅ **Devices without friction.** Re-pairing the same Mac or phone *replaces* its old row (one live device per platform and name) and revoked rows are hidden; this device's own row is the top card, which now restores and connects on launch and reconnects after a drop without a tap. A tap in your own app on a device verb **is** the approval: `POST /v1/actions` decides it as `app-tap` and dispatches at once (R3 still needs the Mac's confirm; mail, posts and money still wait). `phone.call` is R1 (the thumb calls). One switch, *Trust my devices*, grants 30-day envelopes for screenshots, describe screen, typing, keys, files, WhatsApp and the camera so the agent's own proposals stop asking too; revoke in one tap. A *Remove* button per device. The Mac app now also sends WhatsApp (open the chat, press Return only when WhatsApp is frontmost) | ✅ Tests: pairing "This Mac" twice leaves one live row and the phone untouched; a tapped screenshot is approved by `app-tap` and dispatched while `message.send` still waits; the dialer is R1; typing waits until the switch is on and never for mail; the switch revokes cleanly |
+
+---
+
+### Phase 12 — the 2026 agentic patterns (Gemini's tier), and the production bug they surfaced — ✅ built where marked
+
+The owner pasted a third Gemini plan: time-travel checkpointing, MCP, GraphRAG, a
+Markdown "morning intelligence" layer, an MLFQ scheduler, and a local edge voice stack.
+Checked against what already runs; several are already here.
+
+| # | Task | Exit test |
+|---|---|---|
+| 12.0 | ✅ **The production bug the audit found.** The agent and notify workers claimed a batch of jobs and ran them in **one** session; when a job's flush hit a `UniqueViolationError`, the session was poisoned, `queue.fail` could not record it, the tick rolled back, and the job stayed `running` with an expired lease — reaped and retried forever (the agent worker's heartbeat was 24 min stale in production while six jobs sat pending). `workers/loop.py` `drain()` now claims in one short transaction, then runs **each job in its own transaction**: one job's failure cannot poison another, a failure is always recorded, and a bad job dead-letters after its retries instead of wedging the queue | ✅ Tests: a job that raises a real `UniqueViolation` dead-letters while its two neighbours succeed; a retryable job returns to `pending`, never stuck `running` |
+| 12.1 | ✅ **Time-travel checkpointing** — *already built.* The LangGraph Postgres checkpointer saves state at every node (`runtime.postgres_checkpointer`); an R2/R3 pauses the run with `interrupt()` and the decision resumes it from the exact node (`runtime.resume`). Gemini's extra is *rewind to an earlier node and branch* — ⏸ deferred: LangGraph exposes checkpoint history, but a branch UI is a feature of its own and the resume path covers the failure case the owner described (fail at step 18, supply context, continue) | ✅ existing 8.x + 9.x run tests |
+| 12.2 | ⏸ **MCP** — deliberate, with reasons unchanged from §10.0½: the tool gateway's R0–R4 tiers, approvals and evidence have no MCP equivalent, so MCP would be adopted *as a client* for a specific third-party server worth the bridge, never as a replacement for the gated connectors. Not an autonomous-pass change |
+| 12.3 | ⚠️ **GraphRAG** — *partly built.* Triage already writes senders as `person` entities with `RELATED_AS` edges and provenance (`services/graph`, 10.6.2), and `GraphService.neighbourhood`/`why` traverse them; `profile_block` feeds contacts to every prompt. The missing piece is multi-hop *retrieval* at query time ("action items from my Pune trip" walking Location→Date→Event→Task) — ⏸ a `graph.query` tool over the existing edges, medium effort, deferred |
+| 12.4 | ✅ **Morning intelligence layer.** The HUD *is* the live dashboard Gemini describes; `services/briefing.gather` already aggregates due tasks with sources, at-risk goals, recent mail, weather and screen time, and the built-in Morning briefing routine synthesises it before you wake (10.1, 11.3). Gemini's `home.md` framing adds nothing our HUD + briefing does not | ✅ 11.3 briefing tests |
+| 12.5 | ✅ **MLFQ scheduler.** Named priority bands on the one Postgres queue (`JOB_PRIORITY`): a person waiting — a Telegram message, an app tap — is `interactive` (30) and is claimed before `background` (2) routine and research work; a resumed run after an approval is `decision` (20), a deadline rung `escalation` (15). Interactive chat already runs inline, ahead of the queue entirely | ✅ Test: an interactive `agent.run` queued after a background one is claimed first; the bands are ordered |
+| 12.6 | ✅ **Local edge voice** — *already built,* and already preferred when the Mac is online: `macnode voice` runs openWakeWord + faster-whisper on-device and speaks with `say`, and Ollama (LLaMA 3) is a cascade provider, so the whole loop can stay local. The cloud (Twilio, edge-tts) is the fallback for when the Mac is unreachable, exactly as Gemini describes | ✅ 9.6 voice-loop tests |
+
+---
+
+| 12.7 | ✅ **Deadlines survive an exhausted LLM.** When the extractor's whole cascade fails (usually free-tier 429 quota), `extraction/regex_fallback.py` reads a plain date near a deadline word with no model — "exam deadline on 9 September 2026 at 9 am" still becomes a task, flagged confidence 0.55 for confirmation. Month names are an explicit list (so "Due" is not a month) and ambiguous DD/MM defaults to day-first for the owner's locale. A 429 now opens that provider's breaker for 5 minutes so the cascade fails fast instead of hammering the quota | ✅ Unit tests: five phrasings read, four non-dates refused; integration test: a mail normalised while the model raises a quota error still yields the 9 Sept task |
+
+| 12.8 | ✅ **Device control from chat, and the new hands.** The chat/Telegram agent can drive your own devices: `load_context` now resolves your paired phone or Mac when no device is named, so "ring my phone" / "screenshot my Mac" from a message is addressed automatically (it was being *denied* before — a real bug the tests caught). New verbs: `phone.call` **places the call** (ACTION_CALL + CALL_PHONE, dialer fallback), `phone.ring` / `mac.ring` (loud even in silent mode, to find a device), `phone.locate` (GPS → a maps link, R2), `phone.whatsapp_send` (auto-taps Send via an **opt-in Accessibility Service**, R2). Devices cards gained Ring, Locate, Call and WhatsApp-send. **Telegram**: an unlinked chat is no longer met with silence — the bot replies with the chat id and how to link, and Connections has a one-tap *Link Telegram* card (the identities table was empty, which is why Telegram "didn't respond"). The trust switch covers the new hands-on verbs | ✅ Python: tiers and evidence; the agent addresses a ring to the phone with no device id; the trust switch covers locate/whatsapp. Dart: call places-or-falls-back, ring/locate/whatsapp-send report through their hooks, a refused location is a 403 |
+
+### Phase 13 — 50 features, in batches (docs/FEATURES-50.md) — 🚧 batch 1 shipped
+
+The owner asked for fifty more features, done one by one. The full list with batch order
+is `docs/FEATURES-50.md`. Batch 1 (this pass):
+
+| # | Feature | Done |
+|---|---|---|
+| 13.1 | **Snooze / reschedule a deadline** — chips (in an hour, tonight, tomorrow, in a week) or pick a date; writes the new `due_at` and re-arms the alert ladder | ✅ |
+| 13.2 | **Agenda** — the Goals deadlines are grouped by day (Overdue · Today · Tomorrow · weekday · Next week · month), sorted, colour-cued | ✅ |
+| 13.3 | **Search conversations** — a filter field in the chat thread picker | ✅ |
+| 13.4 | **Quick capture** — one FAB anywhere: a thought straight to Jarvis, or add a deadline (date + time), without hunting for the screen | ✅ |
+| 13.5 | **First-run onboarding** — a Home nudge to the 3-minute interview until the profile has something in it | ✅ |
+| 13.7 | **Data export & wipe** — `GET /v1/export` (all your tasks, goals, routines, memories, chats; never secrets or key material), `POST /v1/account/wipe?confirm=DELETE` (clears content, keeps the login and the append-only audit log); Settings → *Your data* | ✅ |
+| 13.8 | **Audit trail viewer** — `GET /v1/audit` (filter by action) + `/v1/audit/actions`; a dedicated screen with action chips | ✅ |
+| 13.9 | **Focus now** — `GET /v1/focus`: the one thing to do (most overdue, else soonest) plus the overdue/upcoming lists; a Focus card at the top of Home | ✅ |
+| 13.10 | **Recurring deadlines** — a task can repeat daily/weekly/weekdays/monthly; completing it spawns the next (weekdays skip the weekend, monthly clamps to day ≤ 28); a Repeat step in add-deadline and a chip on the tile | ✅ |
+| 13.12 | **Phone system info & flashlight** — `phone.system_info` (battery, storage, network) and `phone.torch` verbs, node-routed and tiered R1 (the platform implementations report honestly when a plugin is absent, rather than faking) | ✅ verb + node tests |
+| 13.11 | **Pin conversations** — pinned chats sort first in the picker, with a pin/unpin action | ✅ |
+| 13.6 | **Natural-language quick-add** — `POST /v1/tasks/quick`: "pay rent friday 6pm" → a dated task via the regex reader (weekdays, today/tonight/tomorrow, times), no model needed; the quick-capture bar routes dated text to it | ✅ |
+
+Batches 2–4 (queued): natural-language quick-add, recurring deadlines, slash-commands,
+settings search, the Mac command palette; background execution via FCM, phone system
+info, find-my-devices map; digests, weekly review, GraphRAG answers.
 
 ---
 
@@ -533,7 +668,7 @@ Phases end on **exit tests**, not calendar dates.
 | **Free LLM tiers rate-limit mid-demo** | Demo stalls | Three-provider cascade + circuit breakers + ₹800/mo paid headroom. Pre-warm before the demo. **Verify current quotas in your own accounts** — published limits change often. |
 | **Oracle Always Free ARM capacity exhausted** | No VM | Try adjacent regions; else Hetzner CX32 ~₹650/mo. Identical Compose file. |
 | **Ollama not installed** | Only affects optional local dev | `brew install ollama` in bootstrap. Not on the critical path any more. |
-| **Flutter macOS needs full Xcode** (you have only Command Line Tools) | Blocks Phase 3.1 | Install Xcode (~15 GB, free) **during Phase 0**. Android needs no Xcode, so Phase 2.4 is unblocked regardless. |
+| ~~Flutter macOS needs full Xcode~~ — **resolved** | Blocked Phase 3.1 | Xcode 26.6 installed and licensed; the macOS target and the Android APK both build. Homebrew still refuses *source* builds until Xcode 27; bottles are fine. |
 | **Python 3.14.7 is your default** | `faster-whisper`, `sentence-transformers` have no 3.14 wheels | `uv python pin 3.12`. Non-negotiable. |
 | **WhatsApp needs a Meta Business account + template approval** | 24–48 h lead time | Submit templates in Phase 2, use them in Phase 5. Telegram covers the same escalation slot meanwhile. |
 | **Outbound calling to India is regulated** | Escalation call may not work | Twilio with a verified caller id for the demo. **Android `setAlarmClock` full-screen alarm is the primary wake mechanism** — free, reliable, and arguably better than a call. The call is a bonus tier. |
@@ -599,6 +734,7 @@ unbounded agent loop (`MAX_STEPS=8`, enforced by the harness, not by a prompt).
 **Six test layers:** unit (reducers, policy, date resolution, prediction math) · contract (OpenAPI clients, WS
 envelopes, connector fixtures, Alexa requests) · integration (Postgres, OAuth mocks) · e2e (real Telegram +
 Gmail test account, paired Mac, Android push, Alexa simulator) · adversarial · chaos.
+**613 passing, 1 skipped**, against a real Postgres 16 + pgvector and a real Chromium.
 
 **One correlation id** connects webhook → event → extraction → task → schedule → notification → approval →
 job → evidence. If you cannot follow one request across all nine hops in the logs, the system is not done.

@@ -42,3 +42,76 @@ async def readyz(session: SessionDep) -> dict[str, Any]:
 
     ready = all(v == "ok" for v in checks.values())
     return {"status": "ready" if ready else "degraded", "checks": checks, "build": BUILD_SHA}
+
+
+# ── A2A agent card ─────────────────────────────────────────────────────
+# Discovery only. This publishes *what JARVIS can be asked to do*; it does not open a
+# JSON-RPC task endpoint, and no card can grant a capability — every skill below still
+# runs through the policy engine, and anything above R1 still needs a human approval.
+# Generated from the policy table on purpose: a hand-written card drifts away from what
+# the system actually permits, and a card that overstates the system is a lie a machine
+# will act on.
+_SKILL_TAGS = {
+    "R0": ("read-only", "no-approval"),
+    "R1": ("reversible", "owner-device"),
+}
+
+
+@router.get("/.well-known/agent-card.json")
+async def agent_card() -> dict[str, Any]:
+    """The A2A agent card (also served at the legacy ``/.well-known/agent.json``)."""
+    from jarvis.services.policy.rules import RULES
+
+    settings = get_settings()
+    skills = [
+        {
+            "id": rule.tool,
+            "name": rule.tool,
+            "description": rule.description,
+            "tags": list(_SKILL_TAGS[rule.risk.value]),
+        }
+        for rule in RULES.values()
+        if rule.risk.value in _SKILL_TAGS
+    ]
+
+    return {
+        "protocolVersion": "0.3.0",
+        "name": "JARVIS X",
+        "description": (
+            "Autonomous personal operations platform. Observes commitments, predicts "
+            "failure, prepares the next best action, executes through policy-controlled "
+            "tools, verifies the result, and escalates only when authorized."
+        ),
+        "url": f"{settings.base_url}/v1",
+        "version": BUILD_SHA,
+        "provider": {"organization": "JARVIS X", "url": settings.base_url},
+        "capabilities": {
+            "streaming": True,
+            "pushNotifications": True,
+            "stateTransitionHistory": True,
+        },
+        "defaultInputModes": ["text/plain", "application/json"],
+        "defaultOutputModes": ["text/plain", "application/json"],
+        "securitySchemes": {
+            "oauth2": {
+                "type": "oauth2",
+                "flows": {
+                    "authorizationCode": {
+                        "authorizationUrl": f"{settings.oauth_issuer}/oauth/authorize",
+                        "tokenUrl": f"{settings.oauth_issuer}/oauth/token",
+                        "scopes": {"tasks.read": "Read tasks", "tasks.write": "Create tasks"},
+                    }
+                },
+            }
+        },
+        "security": [{"oauth2": ["tasks.read"]}],
+        "skills": sorted(skills, key=lambda s: s["id"]),
+        # Stated, not implied: effectful work exists but is not offered to a caller
+        # without a human in the loop.
+        "x-jarvis-approval-required-above": "R1",
+    }
+
+
+@router.get("/.well-known/agent.json")
+async def agent_card_legacy() -> dict[str, Any]:
+    return await agent_card()

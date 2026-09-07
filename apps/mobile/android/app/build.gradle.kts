@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "dev.jarvisx.jarvis_x"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -42,4 +42,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Push: the Firebase SDK itself. Options are supplied at runtime from the server's
+    // settings, so no google-services plugin and no google-services.json in the repo.
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
+    implementation("androidx.core:core-ktx:1.15.0")
 }

@@ -52,10 +52,21 @@ class Task {
     this.estimateMinutes,
     this.remainingMinutes,
     this.evidenceSpan,
+    this.sourceProvider,
+    this.sourceAuthor,
+    this.sourceTitle,
+    this.sourceUrl,
+    this.recurrence,
   });
 
   final String id;
   final String? goalId;
+  /// Where the deadline was read from: "gmail" · "Saritha <…>" · the mail subject.
+  final String? sourceProvider;
+  final String? sourceAuthor;
+  final String? sourceTitle;
+  final String? sourceUrl;
+  final String? recurrence;
   final String title;
   final String status;
   final DateTime? dueAt;
@@ -83,6 +94,11 @@ class Task {
         isOptional: json['is_optional'] as bool? ?? false,
         evidenceSpan: json['evidence_span'] as String?,
         version: json['version'] as int,
+        sourceProvider: json['source_provider'] as String?,
+        sourceAuthor: json['source_author'] as String?,
+        sourceTitle: json['source_title'] as String?,
+        sourceUrl: json['source_url'] as String?,
+        recurrence: json['recurrence'] as String?,
       );
 }
 
@@ -164,6 +180,8 @@ class Approval {
     required this.requiresLocalConfirmation,
     required this.locallyConfirmed,
     this.decision,
+    this.tool,
+    this.summary,
   });
 
   final String id;
@@ -172,6 +190,8 @@ class Approval {
   final DateTime expiresAt;
   final bool requiresLocalConfirmation;
   final bool locallyConfirmed;
+  final String? tool;
+  final String? summary;
 
   bool get isPending => decision == null;
 
@@ -183,6 +203,8 @@ class Approval {
         requiresLocalConfirmation:
             json['requires_local_confirmation'] as bool,
         locallyConfirmed: json['locally_confirmed'] as bool,
+        tool: json['tool'] as String?,
+        summary: json['summary'] as String?,
       );
 }
 
@@ -222,6 +244,53 @@ class DeviceInfo {
             : DateTime.parse(json['last_seen_at'] as String).toLocal(),
         allowedBundleIds:
             (json['allowed_bundle_ids'] as List<dynamic>).cast<String>(),
+      );
+}
+
+/// One row of the Timeline: an action, an agent run, or a noteworthy event.
+class TimelineEntry {
+  const TimelineEntry({
+    required this.id,
+    required this.at,
+    required this.kind,
+    required this.title,
+    this.status,
+    this.risk,
+    this.verdict,
+    this.correlationId,
+    this.detail = const {},
+    this.artifacts = const [],
+    this.simulated = false,
+  });
+
+  final String id;
+  final DateTime at;
+  final String kind; // action | run | event
+  final String title;
+  final String? status;
+  final String? risk;
+  final String? verdict;
+  final String? correlationId;
+  final Map<String, dynamic> detail;
+  final List<Map<String, dynamic>> artifacts;
+  final bool simulated;
+
+  bool get isAction => kind == 'action';
+  bool get hasArtifacts => artifacts.isNotEmpty;
+
+  factory TimelineEntry.fromJson(Map<String, dynamic> json) => TimelineEntry(
+        id: json['id'] as String,
+        at: DateTime.parse(json['at'] as String).toLocal(),
+        kind: json['kind'] as String,
+        title: json['title'] as String,
+        status: json['status'] as String?,
+        risk: json['risk'] as String?,
+        verdict: json['verdict'] as String?,
+        correlationId: json['correlation_id'] as String?,
+        detail: (json['detail'] as Map<String, dynamic>?) ?? const {},
+        artifacts: ((json['artifacts'] as List<dynamic>?) ?? const [])
+            .cast<Map<String, dynamic>>(),
+        simulated: (json['simulated'] as bool?) ?? false,
       );
 }
 

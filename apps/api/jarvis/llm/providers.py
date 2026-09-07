@@ -10,6 +10,7 @@ router is in-process, and our breaker state must be shared between the API and e
 
 from __future__ import annotations
 
+import base64
 import time
 from typing import Any
 
@@ -46,6 +47,20 @@ def _classify_error(provider: str, exc: Exception) -> Exception:
     return ProviderTransientError(f"{provider} failed: {type(exc).__name__}: {exc}")
 
 
+def _content(message) -> str | list[dict]:  # noqa: ANN001
+    """Plain text, or OpenAI-style parts when the message carries images — litellm
+    translates the data URI for Gemini, OpenRouter and Ollama alike."""
+    if not getattr(message, "images", None):
+        return message.content
+    parts: list[dict] = [{"type": "text", "text": message.content}]
+    for content_type, data in message.images:
+        encoded = base64.b64encode(data).decode()
+        parts.append(
+            {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{encoded}"}}
+        )
+    return parts
+
+
 class LiteLLMProvider:
     """One configured model, reachable through LiteLLM."""
 
@@ -70,7 +85,7 @@ class LiteLLMProvider:
 
         params: dict[str, Any] = {
             "model": self.model,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "messages": [{"role": m.role, "content": _content(m)} for m in request.messages],
             "max_tokens": request.max_tokens,
             "temperature": request.temperature,
             "api_key": self.api_key,
@@ -115,6 +130,37 @@ class LiteLLMProvider:
             cost_inr=estimate_cost_inr(self.name, self.model, inp, out, is_paid=self.is_paid),
         )
 
+    async def stream(self, request: LLMRequest):  # noqa: ANN201 — async generator of str deltas
+        """Yield text as it is produced. Same request shape as ``generate``.
+
+        Usage is not reported by every provider on a stream, so cost is estimated from
+        the text length after the fact by the router; the ``llm_calls`` row still exists.
+        """
+        if not self.is_configured():
+            raise ProviderNotConfigured(f"{self.name} has no API key configured")
+
+        import litellm
+
+        params: dict[str, Any] = {
+            "model": self.model,
+            "messages": [{"role": m.role, "content": _content(m)} for m in request.messages],
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "api_key": self.api_key,
+            "num_retries": 0,
+            "timeout": 60,
+            "stream": True,
+            **self.extra_params,
+        }
+        try:
+            response = await litellm.acompletion(**params)
+            async for chunk in response:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta
+        except Exception as exc:
+            raise _classify_error(self.name, exc) from exc
+
 
 class GroqProvider(LiteLLMProvider):
     name = "groq"
@@ -155,7 +201,9 @@ class OpenRouterPaidProvider(LiteLLMProvider):
 
 class OllamaProvider(LiteLLMProvider):
     name = "ollama"
-    supports_json_schema = False
+    # Ollama's `format` parameter enforces a JSON schema server-side, and the router
+    # validates the parse regardless — good enough for a last-resort EXTRACT.
+    supports_json_schema = True
 
     def __init__(self) -> None:
         s = get_settings()

@@ -20,9 +20,9 @@ from typing import Any
 from jarvis.core.config import get_settings
 from jarvis.core.logging import get_logger
 from jarvis.db.models.agent import Action, Approval, Risk
-from jarvis.db.models.ops import Device, StandingPermission
+from jarvis.db.models.ops import AuditLog, Device, StandingPermission
 from jarvis.services.policy.rules import POLICY_VERSION, ToolRule, manifest_for, rule_for
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 log = get_logger(__name__)
@@ -48,6 +48,16 @@ class PolicyResult:
         return self.decision is Decision.ALLOW
 
 
+# What a paired device may hand to the OS to open. Everything else is refused.
+OPENABLE_SCHEMES = frozenset({"https", "http", "mailto", "tel", "whatsapp", "maps", "facetime"})
+# App links a phone may be handed (PLAN.md 10.4.2). Checked again on the phone.
+DEEPLINK_SCHEMES = OPENABLE_SCHEMES | frozenset({"geo", "spotify", "youtube", "upi", "sms"})
+MAC_SETTINGS = frozenset({"wifi", "bluetooth", "dark_mode", "do_not_disturb", "brightness"})
+PHONE_SETTINGS_PANELS = frozenset(
+    {"wifi", "bluetooth", "display", "sound", "battery", "location", "dnd", "airplane", "apps"}
+)
+
+
 @dataclass(frozen=True)
 class ProposalContext:
     """Everything the decision depends on, gathered before evaluating.
@@ -64,6 +74,8 @@ class ProposalContext:
     # LMS object. Such content is data; it can propose no tool call.
     from_untrusted_source: bool = False
     standing_permissions: list[StandingPermission] = field(default_factory=list)
+    # Uses today per standing permission id, for the per-day rate (PLAN.md 10.9.2).
+    standing_uses: dict[str, int] = field(default_factory=dict)
 
 
 class PolicyService:
@@ -131,9 +143,11 @@ class PolicyService:
             )
 
         if rule.risk is Risk.R2:
-            if self._standing_permission_covers(rule, context):
+            if (permission := self._standing_permission_for(rule, context)) is not None:
                 return PolicyResult(
-                    Decision.ALLOW, rule.risk, "Covered by a standing permission the user granted"
+                    Decision.ALLOW,
+                    rule.risk,
+                    f"Covered by a standing permission the user granted standing:{permission.id}",
                 )
             return PolicyResult(
                 Decision.REQUIRE_APPROVAL, rule.risk,
@@ -172,6 +186,18 @@ class PolicyService:
             case "url_scheme_is_https":
                 url = str(context.args.get("url", ""))
                 return url.startswith("https://")
+            case "url_scheme_allowlisted":
+                # A device opens URLs with whatever app claims the scheme. file:// and
+                # javascript: are not "apps", and a custom scheme can be anything.
+                scheme = str(context.args.get("url", "")).split(":", 1)[0].lower()
+                return scheme in OPENABLE_SCHEMES
+            case "setting_key_allowlisted":
+                return str(context.args.get("key", "")).lower() in MAC_SETTINGS
+            case "settings_panel_allowlisted":
+                return str(context.args.get("panel", "")).lower() in PHONE_SETTINGS_PANELS
+            case "deeplink_scheme_allowlisted":
+                scheme = str(context.args.get("url", "")).split(":", 1)[0].lower()
+                return scheme in DEEPLINK_SCHEMES
             case "template_is_registered":
                 from jarvis.services.tool_gateway.templates import COMMAND_TEMPLATES
 
@@ -183,14 +209,17 @@ class PolicyService:
                 log.error("policy_unknown_condition", condition=condition)
                 return False
 
-    def _standing_permission_covers(self, rule: ToolRule, context: ProposalContext) -> bool:
+    def _standing_permission_for(
+        self, rule: ToolRule, context: ProposalContext
+    ) -> StandingPermission | None:
         """A pre-granted allowance, so routine work does not ask every single time.
 
         Never applies to R3 or R4: those are exactly the actions a blanket grant should
-        not be able to cover.
+        not be able to cover. Keys starting with ``_`` are constraints on the grant
+        itself (``_max_per_day``), not on the arguments.
         """
         if not rule.standing_permission_allowed or rule.risk in (Risk.R3, Risk.R4):
-            return False
+            return None
         now = datetime.now(UTC)
         for permission in context.standing_permissions:
             if permission.tool != context.tool or permission.revoked_at is not None:
@@ -199,9 +228,17 @@ class PolicyService:
                 continue
             if _risk_rank(permission.max_risk) < _risk_rank(rule.risk.value):
                 continue
-            if all(context.args.get(k) == v for k, v in (permission.conditions or {}).items()):
-                return True
-        return False
+            conditions = dict(permission.conditions or {})
+            cap = conditions.pop("_max_per_day", None)
+            if cap is not None and context.standing_uses.get(str(permission.id), 0) >= int(cap):
+                continue
+            wanted = {k: v for k, v in conditions.items() if not k.startswith("_")}
+            if all(context.args.get(k) == v for k, v in wanted.items()):
+                return permission
+        return None
+
+    def _standing_permission_covers(self, rule: ToolRule, context: ProposalContext) -> bool:
+        return self._standing_permission_for(rule, context) is not None
 
     async def load_context(
         self,
@@ -217,6 +254,22 @@ class PolicyService:
             device = await self.session.scalar(
                 select(Device).where(Device.id == device_id, Device.user_id == user_id)
             )
+        elif tool.split(".", 1)[0] in ("mac", "phone"):
+            # No device named (the agent proposing "ring my phone" from chat): resolve the
+            # owner's own paired device of the right platform, so the check has something
+            # to see. The executor picks the live one again at dispatch.
+            platform = "macos" if tool.startswith("mac.") else "android"
+            device = await self.session.scalar(
+                select(Device)
+                .where(
+                    Device.user_id == user_id,
+                    Device.platform == platform,
+                    Device.revoked_at.is_(None),
+                    Device.paired_at.is_not(None),
+                )
+                .order_by(Device.last_seen_at.desc().nulls_last())
+                .limit(1)
+            )
         permissions = list(
             (
                 await self.session.scalars(
@@ -228,6 +281,23 @@ class PolicyService:
                 )
             ).all()
         )
+        uses: dict[str, int] = {}
+        for permission in permissions:
+            if "_max_per_day" not in (permission.conditions or {}):
+                continue
+            uses[str(permission.id)] = int(
+                await self.session.scalar(
+                    select(func.count())
+                    .select_from(AuditLog)
+                    .where(
+                        AuditLog.user_id == user_id,
+                        AuditLog.action == "action.proposed",
+                        AuditLog.created_at >= func.date_trunc("day", func.now()),
+                        AuditLog.detail["reason"].astext.contains(f"standing:{permission.id}"),
+                    )
+                )
+                or 0
+            )
         return ProposalContext(
             user_id=user_id,
             tool=tool,
@@ -235,6 +305,7 @@ class PolicyService:
             device=device,
             from_untrusted_source=from_untrusted_source,
             standing_permissions=permissions,
+            standing_uses=uses,
         )
 
     # ── the executor's independent second check ────────────────────────

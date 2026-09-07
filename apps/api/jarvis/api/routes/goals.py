@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, status
 from pydantic import BaseModel, Field
 
 from jarvis.api.deps import CurrentUser, SessionDep
+from jarvis.core.config import get_settings
 from jarvis.services.goal import GoalService
 
 router = APIRouter(prefix="/v1", tags=["goals"])
@@ -43,6 +44,7 @@ class TaskCreate(BaseModel):
     priority: int = Field(default=2, ge=0, le=4)
     is_optional: bool = False
     depends_on: list[uuid.UUID] = Field(default_factory=list)
+    recurrence: str | None = Field(default=None, pattern="^(daily|weekly|weekdays|monthly)$")
 
 
 class TaskUpdate(BaseModel):
@@ -52,6 +54,7 @@ class TaskUpdate(BaseModel):
     estimate_minutes: int | None = Field(default=None, ge=0)
     remaining_minutes: int | None = Field(default=None, ge=0)
     is_optional: bool | None = None
+    recurrence: str | None = Field(default=None, pattern="^(daily|weekly|weekdays|monthly)?$")
 
 
 class TaskOut(BaseModel):
@@ -66,6 +69,12 @@ class TaskOut(BaseModel):
     is_optional: bool
     evidence_span: str | None
     version: int
+    recurrence: str | None = None
+    # Where a deadline was read from — "Gmail · Saritha" — so a task can be trusted.
+    source_provider: str | None = None
+    source_author: str | None = None
+    source_title: str | None = None
+    source_url: str | None = None
 
 
 class OptionOut(BaseModel):
@@ -99,14 +108,45 @@ def _goal_out(goal: Any) -> GoalOut:
     )
 
 
-def _task_out(task: Any) -> TaskOut:
+def _task_out(task: Any, source: Any = None) -> TaskOut:
     return TaskOut(
         id=str(task.id), goal_id=str(task.goal_id) if task.goal_id else None,
         title=task.title, status=task.status, due_at=task.due_at,
         estimate_minutes=task.estimate_minutes, remaining_minutes=task.remaining_minutes,
         priority=task.priority, is_optional=task.is_optional,
         evidence_span=task.evidence_span, version=task.version,
+        recurrence=task.recurrence,
+        source_provider=source.provider if source else None,
+        source_author=source.author if source else None,
+        source_title=source.title if source else None,
+        source_url=source.url if source else None,
     )
+
+
+@router.get("/tasks", response_model=list[TaskOut])
+async def list_tasks(
+    user: CurrentUser, session: SessionDep, status: str = "open", limit: int = 200
+) -> list[TaskOut]:
+    """Every task, deadlines first — including the ones read out of your mail, with the
+    message they came from. ``status=all`` includes done and cancelled."""
+    from sqlalchemy import select
+
+    from jarvis.db.models.domain import Task
+    from jarvis.db.models.source import SourceObject
+
+    stmt = (
+        select(Task, SourceObject)
+        .outerjoin(SourceObject, SourceObject.id == Task.source_id)
+        .where(Task.user_id == user.id)
+        .order_by(Task.due_at.asc().nulls_last(), Task.created_at.desc())
+        .limit(min(limit, 500))
+    )
+    if status == "open":
+        stmt = stmt.where(Task.status.in_(("open", "in_progress")))
+    elif status != "all":
+        stmt = stmt.where(Task.status == status)
+    rows = (await session.execute(stmt)).all()
+    return [_task_out(task, source) for task, source in rows]
 
 
 @router.post("/goals", response_model=GoalOut, status_code=status.HTTP_201_CREATED)
@@ -161,12 +201,46 @@ async def get_prediction(
     )
 
 
+class QuickAdd(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/tasks/quick", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
+async def quick_add(body: QuickAdd, user: CurrentUser, session: SessionDep) -> TaskOut:
+    """"pay rent friday 6pm" → a dated task. The regex reader tries first (no model,
+    always works); the model refines only if a key is live (PLAN.md 13.6)."""
+    from datetime import UTC, datetime
+
+    from jarvis.services.extraction.regex_fallback import extract_deadline
+    from jarvis.services.extraction.resolver import resolve
+
+    now = datetime.now(UTC)
+    tz = user.timezone or get_settings().timezone
+    guessed = extract_deadline(body.text, body.text, now, require_cue=False)
+    due = None
+    title = body.text.strip()[:500]
+    if guessed is not None and guessed.has_deadline:
+        try:
+            resolved = resolve(guessed, received_at=now, default_timezone=tz)
+            due = resolved.due_at if resolved else None
+            title = (guessed.title or title)[:500]
+        except Exception:  # noqa: BLE001 — a bad parse just means no date
+            due = None
+    task = await GoalService(session).create_task(
+        user.id, title=title, due_at=due, timezone=tz,
+        evidence_span=body.text[:500] if due else None,
+        confidence=0.55 if due else None,
+    )
+    return _task_out(task)
+
+
 @router.post("/tasks", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 async def create_task(body: TaskCreate, user: CurrentUser, session: SessionDep) -> TaskOut:
     task = await GoalService(session).create_task(
         user.id, title=body.title, goal_id=body.goal_id, due_at=body.due_at,
         timezone=body.timezone, estimate_minutes=body.estimate_minutes,
         priority=body.priority, is_optional=body.is_optional, depends_on=body.depends_on,
+        recurrence=body.recurrence,
     )
     return _task_out(task)
 

@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import 'cache.dart';
 import 'models.dart';
 
 /// Typed HTTP client for the JARVIS X API.
@@ -9,11 +11,19 @@ import 'models.dart';
 /// Refresh is handled here rather than at call sites: an access token lives 15 minutes,
 /// and a screen that has to think about that will eventually forget.
 class JarvisClient {
-  JarvisClient({required this.baseUrl, http.Client? httpClient, this.onTokens})
-      : _http = httpClient ?? http.Client();
+  JarvisClient({
+    required this.baseUrl,
+    http.Client? httpClient,
+    this.onTokens,
+    ResponseCache? cache,
+  })  : _http = httpClient ?? http.Client(),
+        cache = cache ?? ResponseCache();
 
   final String baseUrl;
   final http.Client _http;
+  /// Last good GET bodies, so a screen shows something before the network answers.
+  final ResponseCache cache;
+  final Map<String, Uint8List> _artifacts = {};
 
   /// Called whenever tokens change, so they can be persisted.
   final void Function(String access, String refresh)? onTokens;
@@ -32,6 +42,8 @@ class JarvisClient {
   void clearTokens() {
     _accessToken = null;
     _refreshToken = null;
+    cache.clear();
+    _artifacts.clear();
   }
 
   Uri _uri(String path, [Map<String, String>? query]) =>
@@ -71,7 +83,29 @@ class JarvisClient {
       throw _problem(response);
     }
     if (response.body.isEmpty) return null;
-    return jsonDecode(response.body);
+    final decoded = jsonDecode(response.body);
+    if (method == 'GET') cache.put(_cacheKey(path, query), decoded);
+    return decoded;
+  }
+
+  static String _cacheKey(String path, Map<String, String>? query) =>
+      query == null || query.isEmpty ? path : '$path?${Uri(queryParameters: query).query}';
+
+  /// Cached body first (if any), then the fresh one: the shape every list provider uses.
+  Stream<T> staleWhileRevalidate<T>(
+    String path, {
+    Map<String, String>? query,
+    required T Function(dynamic json) parse,
+  }) async* {
+    final cached = cache.get(_cacheKey(path, query));
+    if (cached != null) {
+      try {
+        yield parse(cached);
+      } catch (_) {
+        // an old shape on disk; the fresh answer replaces it
+      }
+    }
+    yield parse(await _send('GET', path, query: query));
   }
 
   ProblemException _problem(http.Response response) {
@@ -102,6 +136,15 @@ class JarvisClient {
       if (displayName != null) 'display_name': displayName,
     }, retryOnUnauthorized: false);
   }
+
+  Future<Map<String, dynamic>> googleLoginStart() async =>
+      await _send('GET', '/v1/auth/google/start', retryOnUnauthorized: false)
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> googleLoginPoll(String pollToken) async =>
+      await _send('POST', '/v1/auth/google/poll',
+          body: {'poll_token': pollToken},
+          retryOnUnauthorized: false) as Map<String, dynamic>;
 
   Future<bool> refresh() async {
     if (_refreshToken == null) return false;
@@ -141,18 +184,34 @@ class JarvisClient {
     return Prediction.fromJson(data);
   }
 
+  Future<Task> setTaskStatus(String id, String status, {int? version}) =>
+      updateTask(id, {'status': status}, version: version);
+
+  Future<List<Task>> tasks({String status = 'open'}) async {
+    final data = await _send('GET', '/v1/tasks', query: {'status': status}) as List<dynamic>;
+    return data.map((e) => Task.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Task> quickAdd(String text) async {
+    final data = await _send('POST', '/v1/tasks/quick', body: {'text': text})
+        as Map<String, dynamic>;
+    return Task.fromJson(data);
+  }
+
   Future<Task> createTask(
     String title, {
     String? goalId,
     DateTime? dueAt,
     int? estimateMinutes,
     bool isOptional = false,
+    String? recurrence,
   }) async {
     final data = await _send('POST', '/v1/tasks', body: {
       'title': title,
       if (goalId != null) 'goal_id': goalId,
       if (dueAt != null) 'due_at': dueAt.toUtc().toIso8601String(),
       if (estimateMinutes != null) 'estimate_minutes': estimateMinutes,
+      if (recurrence != null) 'recurrence': recurrence,
       'is_optional': isOptional,
     }) as Map<String, dynamic>;
     return Task.fromJson(data);
@@ -190,11 +249,452 @@ class JarvisClient {
       await _send('POST', '/v1/actions/simulate',
           body: {'tool': tool, 'args': args}) as Map<String, dynamic>;
 
+  // ── youtube pipeline ──────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> videoRuns() async {
+    final data = await _send('GET', '/v1/youtube/videos') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> generateVideo(String topic) async =>
+      await _send('POST', '/v1/youtube/videos', body: {'topic': topic})
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> videoAssets() async =>
+      await _send('GET', '/v1/youtube/assets') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> videoAnalytics() async =>
+      await _send('GET', '/v1/youtube/analytics') as Map<String, dynamic>;
+
+  Future<void> refreshAnalytics() async =>
+      _send('POST', '/v1/youtube/analytics/refresh');
+
+  Future<void> checkComments() async => _send('POST', '/v1/youtube/comments/check');
+
+  // ── chat ──────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> chat(List<Map<String, String>> messages) async =>
+      await _send('POST', '/v1/chat', body: {'messages': messages})
+          as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> chatHistory() async {
+    final data = await _send('GET', '/v1/chat/history') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  /// Multipart upload of a voice sample, hero video, or BGM track.
+  Future<Map<String, dynamic>> uploadAsset(
+      String kind, String filename, List<int> bytes) async {
+    Future<http.Response> attempt() async {
+      final request = http.MultipartRequest('POST', _uri('/v1/youtube/assets'))
+        ..headers.addAll(
+            {if (_accessToken != null) 'Authorization': 'Bearer $_accessToken'})
+        ..fields['kind'] = kind
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      return http.Response.fromStream(await _http.send(request));
+    }
+
+    var response = await attempt();
+    if (response.statusCode == 401 && await refresh()) {
+      response = await attempt();
+    }
+    if (response.statusCode >= 400) throw _problem(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> publishVideo(String jobId) async =>
+      await _send('POST', '/v1/youtube/videos/$jobId/publish')
+          as Map<String, dynamic>;
+
+  Future<String> videoPreviewUrl(String actionId) async {
+    final data = await _send('GET', '/v1/youtube/actions/$actionId/preview_url')
+        as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  Future<List<Map<String, dynamic>>> connectors() async {
+    final data = await _send('GET', '/v1/connectors') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<String> googleAuthUrl({bool youtube = true, bool write = true}) async {
+    final data = await _send('GET', '/v1/connectors/google/authorize', query: {
+      'include_write': '$write',
+      'include_youtube': '$youtube',
+    }) as Map<String, dynamic>;
+    return data['authorization_url'] as String;
+  }
+
+  // ── settings ──────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> settings() async =>
+      await _send('GET', '/v1/settings') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> updateSettings(Map<String, dynamic> changes) async =>
+      await _send('PUT', '/v1/settings', body: changes) as Map<String, dynamic>;
+
   // ── devices and kill switch ───────────────────────────────────────
   Future<List<DeviceInfo>> devices() async {
     final data = await _send('GET', '/v1/devices') as List<dynamic>;
     return data.map((d) => DeviceInfo.fromJson(d as Map<String, dynamic>)).toList();
   }
+
+  /// One typed action, straight from a button. An R1 runs now; an R2 comes back as
+  /// `awaiting_approval` with the approval id; a denial says why.
+  Future<Map<String, dynamic>> runAction(
+    String tool, {
+    Map<String, dynamic> args = const {},
+    String? deviceId,
+  }) async =>
+      await _send('POST', '/v1/actions', body: {
+        'tool': tool,
+        'args': args,
+        if (deviceId != null) 'device_id': deviceId,
+      }) as Map<String, dynamic>;
+
+  // ── chat: streaming, conversations, memories, runs ────────────────
+  /// The reply as it is written. Yields the server's events: delta / final / error / done.
+  Stream<Map<String, dynamic>> chatStream(
+    List<Map<String, String>> messages, {
+    String? conversationId,
+    String? provider,
+    String? persona,
+  }) async* {
+    Future<http.StreamedResponse> open() {
+      final request = http.Request('POST', _uri('/v1/chat/stream'))
+        ..headers.addAll(_headers)
+        ..body = jsonEncode({
+          'messages': messages,
+          if (conversationId != null) 'conversation_id': conversationId,
+          if (provider != null && provider != 'auto') 'provider': provider,
+          if (persona != null) 'persona': persona,
+        });
+      return _http.send(request);
+    }
+
+    yield* _events(open);
+  }
+
+  /// Server-Sent Events, one decoded `data:` frame at a time. Shared by the chat stream
+  /// and the HUD's live feed.
+  Stream<Map<String, dynamic>> _events(Future<http.StreamedResponse> Function() open) async* {
+    var streamed = await open();
+    if (streamed.statusCode == 401 && _refreshToken != null && await refresh()) {
+      streamed = await open();
+    }
+    if (streamed.statusCode >= 400) {
+      throw _problem(await http.Response.fromStream(streamed));
+    }
+    var buffer = '';
+    await for (final chunk in streamed.stream.transform(utf8.decoder)) {
+      buffer += chunk;
+      while (true) {
+        final end = buffer.indexOf('\n\n');
+        if (end == -1) break;
+        final frame = buffer.substring(0, end);
+        buffer = buffer.substring(end + 2);
+        for (final line in frame.split('\n')) {
+          if (line.startsWith('data: ')) {
+            yield jsonDecode(line.substring(6)) as Map<String, dynamic>;
+          }
+        }
+      }
+    }
+  }
+
+  // ── the HUD and its live feed ─────────────────────────────────────
+  Future<Map<String, dynamic>> hud() async =>
+      await _send('GET', '/v1/hud') as Map<String, dynamic>;
+
+  /// What the system does, as it happens. Ends when the server closes it; the caller
+  /// reconnects.
+  Stream<Map<String, dynamic>> live() =>
+      _events(() => _http.send(http.Request('GET', _uri('/v1/live'))..headers.addAll(_headers)));
+
+  // ── personas and the interview ────────────────────────────────────
+  Future<List<Map<String, dynamic>>> personas() async {
+    final data = await _send('GET', '/v1/personas') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> savePersona(String key, Map<String, dynamic> body) async =>
+      await _send('PUT', '/v1/personas/$key', body: body) as Map<String, dynamic>;
+
+  Future<void> deletePersona(String key) async => _send('DELETE', '/v1/personas/$key');
+
+  Future<List<Map<String, dynamic>>> interviewQuestions() async {
+    final data = await _send('GET', '/v1/profile/interview') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> submitInterview(Map<String, String> answers) async =>
+      await _send('POST', '/v1/profile/interview', body: {'answers': answers})
+          as Map<String, dynamic>;
+
+  /// A paired device hands over bytes it produced (a photo, a screenshot).
+  Future<Map<String, dynamic>> uploadArtifact(
+      String deviceId, String kind, String filename, List<int> bytes) async {
+    Future<http.Response> attempt() async {
+      final request = http.MultipartRequest('POST', _uri('/v1/devices/$deviceId/artifacts'))
+        ..headers.addAll(
+            {if (_accessToken != null) 'Authorization': 'Bearer $_accessToken'})
+        ..fields['kind'] = kind
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      return http.Response.fromStream(await _http.send(request));
+    }
+
+    var response = await attempt();
+    if (response.statusCode == 401 && await refresh()) {
+      response = await attempt();
+    }
+    if (response.statusCode >= 400) throw _problem(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  // ── standing permissions (PLAN.md 10.9.2) ─────────────────────────
+  Future<List<Map<String, dynamic>>> permissions() async {
+    final data = await _send('GET', '/v1/permissions') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> grantPermission(
+    String tool, {
+    Map<String, dynamic> conditions = const {},
+    int? maxPerDay,
+    int days = 7,
+  }) async =>
+      await _send('POST', '/v1/permissions', body: {
+        'tool': tool,
+        'conditions': conditions,
+        if (maxPerDay != null) 'max_per_day': maxPerDay,
+        'days': days,
+      }) as Map<String, dynamic>;
+
+  Future<void> revokePermission(String id) async => _send('DELETE', '/v1/permissions/$id');
+
+  /// "My own Mac and phone may act for me without asking" (PLAN.md 11.8).
+  Future<Map<String, dynamic>> trustDevices({int days = 30}) async =>
+      await _send('POST', '/v1/permissions/trust-devices', body: {'days': days})
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> trustStatus() async =>
+      await _send('GET', '/v1/permissions/trust-devices') as Map<String, dynamic>;
+
+  Future<void> untrustDevices() async => _send('DELETE', '/v1/permissions/trust-devices');
+
+  Future<void> revokeDevice(String id) async => _send('POST', '/v1/devices/$id/revoke');
+
+  Future<Map<String, dynamic>> exportData() async =>
+      await _send('GET', '/v1/export') as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> auditLog({String? action}) async {
+    final data = await _send('GET', '/v1/audit',
+        query: action == null ? null : {'action': action}) as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<List<String>> auditActions() async {
+    final data = await _send('GET', '/v1/audit/actions') as List<dynamic>;
+    return data.cast<String>();
+  }
+
+  Future<Map<String, dynamic>> focus() async =>
+      await _send('GET', '/v1/focus') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> wipeAccount() async =>
+      await _send('POST', '/v1/account/wipe', query: {'confirm': 'DELETE'})
+          as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> identities() async {
+    final data = await _send('GET', '/v1/identities') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> linkIdentity(String provider, String subject) async =>
+      await _send('POST', '/v1/identities', body: {'provider': provider, 'subject': subject})
+          as Map<String, dynamic>;
+
+  /// The activity sampler hands over app names with timestamps (PLAN.md 10.6.3).
+  Future<Map<String, dynamic>> postActivity(
+          String deviceId, List<Map<String, dynamic>> items) async =>
+      await _send('POST', '/v1/devices/$deviceId/activity', body: items)
+          as Map<String, dynamic>;
+
+  /// What the nightly loop proposes for the profile (PLAN.md 10.6.5).
+  Future<List<Map<String, dynamic>>> suggestions() async {
+    final data = await _send('GET', '/v1/profile/suggestions') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> resolveSuggestion(String id, {required bool accept}) async =>
+      await _send('POST', '/v1/profile/suggestions/$id/${accept ? 'accept' : 'dismiss'}')
+          as Map<String, dynamic>;
+
+  /// The notification mirror hands over allowlisted titles (PLAN.md 10.4.4).
+  Future<Map<String, dynamic>> postNotifications(
+          String deviceId, List<Map<String, dynamic>> items) async =>
+      await _send('POST', '/v1/devices/$deviceId/notifications', body: items)
+          as Map<String, dynamic>;
+
+  // ── routines ──────────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> routines() async {
+    final data = await _send('GET', '/v1/routines') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createRoutine(Map<String, dynamic> body) async =>
+      await _send('POST', '/v1/routines', body: body) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> updateRoutine(String id, Map<String, dynamic> changes) async =>
+      await _send('PATCH', '/v1/routines/$id', body: changes) as Map<String, dynamic>;
+
+  Future<void> deleteRoutine(String id) async => _send('DELETE', '/v1/routines/$id');
+
+  Future<Map<String, dynamic>> runRoutine(String id) async =>
+      await _send('POST', '/v1/routines/$id/run') as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> conversations() async {
+    final data = await _send('GET', '/v1/conversations') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createConversation() async =>
+      await _send('POST', '/v1/conversations') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> pinConversation(String id, bool pinned) async =>
+      await _send('PATCH', '/v1/conversations/$id', body: {'pinned': pinned})
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> renameConversation(String id, String title) async =>
+      await _send('PATCH', '/v1/conversations/$id', body: {'title': title})
+          as Map<String, dynamic>;
+
+  Future<void> deleteConversation(String id) async =>
+      _send('DELETE', '/v1/conversations/$id');
+
+  Future<List<Map<String, dynamic>>> conversationHistory(String? conversationId) async {
+    final data = await _send('GET', '/v1/chat/history',
+        query: conversationId == null ? null : {'conversation_id': conversationId}) as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> memories() async {
+    final data = await _send('GET', '/v1/memories') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> forgetMemory(String id) async => _send('DELETE', '/v1/memories/$id');
+
+  Future<Map<String, dynamic>> run(String runId) async =>
+      await _send('GET', '/v1/runs/$runId') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> health() async =>
+      await _send('GET', '/healthz', retryOnUnauthorized: false) as Map<String, dynamic>;
+
+  // ── second brain: status, profile, feedback, sync ─────────────────
+  Future<Map<String, dynamic>> systemStatus({bool fresh = false}) async =>
+      await _send('GET', '/v1/system/status', query: fresh ? {'fresh': 'true'} : null)
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> profile() async =>
+      await _send('GET', '/v1/profile') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> fields) async =>
+      await _send('PUT', '/v1/profile', body: fields) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> learnStyle() async =>
+      await _send('POST', '/v1/profile/learn-style') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> feedbackStats() async =>
+      await _send('GET', '/v1/profile/feedback') as Map<String, dynamic>;
+
+  Future<void> sendFeedback({
+    String? messageId,
+    required int score,
+    String? note,
+    String? excerpt,
+  }) async =>
+      _send('POST', '/v1/chat/feedback', body: {
+        if (messageId != null) 'message_id': messageId,
+        'score': score,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (excerpt != null) 'excerpt': excerpt,
+      });
+
+  Future<Map<String, dynamic>> syncAllConnectors() async =>
+      await _send('POST', '/v1/connectors/sync') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> syncConnector(String id) async =>
+      await _send('POST', '/v1/connectors/$id/sync') as Map<String, dynamic>;
+
+  // ── notification endpoints ────────────────────────────────────────
+  Future<Map<String, dynamic>> registerEndpoint(
+          {required String channel, required String address, bool enabled = true}) async =>
+      await _send('PUT', '/v1/notifications/endpoints',
+          body: {'channel': channel, 'address': address, 'enabled': enabled}) as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> endpoints() async {
+    final data = await _send('GET', '/v1/notifications/endpoints') as List<dynamic>;
+    return data.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> deleteEndpoint(String id) async =>
+      _send('DELETE', '/v1/notifications/endpoints/$id');
+
+  // ── voice ─────────────────────────────────────────────────────────
+  /// The server's neural voice for a reply. Null when offline — the caller falls
+  /// back to the device voice rather than to silence.
+  Future<Uint8List?> ttsBytes(String text) async {
+    try {
+      final response = await _http.post(
+        _uri('/v1/tts'),
+        headers: _headers,
+        body: jsonEncode({'text': text.length > 2000 ? text.substring(0, 2000) : text}),
+      );
+      if (response.statusCode != 200) return null;
+      return response.bodyBytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── timeline and artifacts ────────────────────────────────────────
+  Future<List<TimelineEntry>> timeline({int limit = 100}) async {
+    final data =
+        await _send('GET', '/v1/timeline', query: {'limit': '$limit'}) as List<dynamic>;
+    return data
+        .map((e) => TimelineEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Artifact bytes, fetched with the bearer token — an `Image.network` cannot carry it.
+  Future<Uint8List> artifactBytes(String url) async {
+    final hit = _artifacts[url];
+    if (hit != null) return hit;
+    final bytes = await _fetchArtifact(url);
+    if (_artifacts.length > 30) _artifacts.remove(_artifacts.keys.first);
+    _artifacts[url] = bytes;
+    return bytes;
+  }
+
+  Future<Uint8List> _fetchArtifact(String url) async {
+    final response = await _http.get(_uri(url), headers: _headers);
+    if (response.statusCode >= 400) throw _problem(response);
+    return response.bodyBytes;
+  }
+
+  // ── this phone as a device ────────────────────────────────────────
+  Future<Map<String, dynamic>> beginPairing(Map<String, dynamic> body) async =>
+      await _send('POST', '/v1/devices/pair', body: body) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> completePairing(Map<String, dynamic> body) async =>
+      await _send('POST', '/v1/devices/pair/complete', body: body) as Map<String, dynamic>;
+
+  Future<String> serverPublicKey() async {
+    final data = await _send('GET', '/v1/devices/server-key') as Map<String, dynamic>;
+    return data['public_key_pem'] as String;
+  }
+
+  String? get accessToken => _accessToken;
+
+  String get wsBase => baseUrl.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://');
 
   Future<Map<String, dynamic>> pause({String reason = 'mobile emergency'}) async =>
       await _send('POST', '/v1/agent/pause', query: {'reason': reason})

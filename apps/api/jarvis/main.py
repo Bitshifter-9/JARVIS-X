@@ -11,17 +11,45 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from jarvis.api.routes import (
+    alexa,
     approvals,
+    artifacts,
     auth,
+    chat,
     connectors,
     devices,
     goals,
     health,
+    hud,
+    identities,
+    internal,
+    me,
+    memories,
     metrics,
+    notifications,
     oauth,
+    permissions,
+    personas,
+    profile,
+    routines,
+    runs,
     webhooks,
+    youtube,
+)
+from jarvis.api.routes import (
+    settings as settings_routes,
+)
+from jarvis.api.routes import (
+    system as system_routes,
+)
+from jarvis.api.routes import (
+    timeline as timeline_routes,
+)
+from jarvis.api.routes import (
+    tts as tts_routes,
 )
 from jarvis.core.config import get_settings
 from jarvis.core.correlation import CorrelationMiddleware
@@ -45,7 +73,7 @@ async def lifespan(_app: FastAPI):
     if not settings.jwt_secret.strip():
         raise RuntimeError(
             "JARVIS_JWT_SECRET is empty. Generate one and put it in .env:\n"
-            "    echo \"JARVIS_JWT_SECRET=$(openssl rand -hex 32)\" >> .env"
+            '    echo "JARVIS_JWT_SECRET=$(openssl rand -hex 32)" >> .env'
         )
 
     # A placeholder key outside local development would let anyone mint a token for any
@@ -55,6 +83,18 @@ async def lifespan(_app: FastAPI):
             "JARVIS_JWT_SECRET is still the development placeholder. "
             "Generate one with: openssl rand -hex 32"
         )
+
+    # Settings the owner saved from the app, laid over the environment.
+    try:
+        from jarvis.core.overrides import apply_overrides
+        from jarvis.db.session import session_scope
+
+        async with session_scope() as session:
+            applied = await apply_overrides(session)
+        if applied:
+            log.info("settings_overrides_applied", count=applied)
+    except Exception as exc:  # noqa: BLE001 — a missing table on first boot is not fatal
+        log.warning("settings_overrides_skipped", error=str(exc)[:120])
 
     log.info(
         "api_starting",
@@ -98,17 +138,38 @@ def create_app() -> FastAPI:
         )
 
     app.add_middleware(CorrelationMiddleware)
+    # Timeline and HUD payloads shrink 5–10× on the wire; phones on mobile data notice.
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
     register_exception_handlers(app)
 
     app.include_router(health.router)
+    app.include_router(alexa.router)
     app.include_router(auth.router)
     app.include_router(oauth.router)
     app.include_router(goals.router)
     app.include_router(approvals.router)
     app.include_router(devices.router)
     app.include_router(webhooks.router)
+    app.include_router(internal.router)
+    app.include_router(identities.router)
+    app.include_router(notifications.router)
+    app.include_router(memories.router)
+    app.include_router(runs.router)
+    app.include_router(profile.router)
+    app.include_router(system_routes.router)
     app.include_router(metrics.router)
     app.include_router(connectors.router)
+    app.include_router(youtube.router)
+    app.include_router(settings_routes.router)
+    app.include_router(chat.router)
+    app.include_router(artifacts.router)
+    app.include_router(timeline_routes.router)
+    app.include_router(tts_routes.router)
+    app.include_router(hud.router)
+    app.include_router(routines.router)
+    app.include_router(me.router)
+    app.include_router(personas.router)
+    app.include_router(permissions.router)
 
     return app
 

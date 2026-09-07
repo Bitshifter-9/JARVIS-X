@@ -72,6 +72,16 @@ def _backoff_seconds(attempts: int) -> float:
     return random.uniform(0, ceiling)  # noqa: S311 — jitter, not cryptography
 
 
+# Priority bands (MLFQ, PLAN.md 12.5). Higher jumps ahead in the same claim.
+JOB_PRIORITY = {
+    "interactive": 30,   # a person is waiting: a Telegram message, an app tap
+    "decision": 20,      # a resumed run after an approval
+    "escalation": 15,    # a deadline rung climbing
+    "default": 5,
+    "background": 2,     # routines, briefings, long research — yield to the above
+}
+
+
 class JobQueue:
     """Queue operations against one session. Cheap to construct; hold no state."""
 
@@ -136,7 +146,12 @@ class JobQueue:
 
     # ── consuming ──────────────────────────────────────────────────────
     async def claim(
-        self, worker_id: str, *, limit: int = 1, kinds: list[str] | None = None
+        self,
+        worker_id: str,
+        *,
+        limit: int = 1,
+        kinds: list[str] | None = None,
+        visibility_seconds: float | None = None,
     ) -> list[Job]:
         """Atomically claim up to ``limit`` due jobs.
 
@@ -178,7 +193,7 @@ class JobQueue:
         params: dict[str, Any] = {
             "limit": limit,
             "worker_id": worker_id,
-            "visibility": float(s.job_visibility_timeout_seconds),
+            "visibility": float(visibility_seconds or s.job_visibility_timeout_seconds),
             "kinds": kinds,
         }
 

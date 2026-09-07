@@ -28,6 +28,7 @@ log = get_logger(__name__)
 PREDICATES = frozenset({
     "OWNS", "HAS_GOAL", "BLOCKED_BY", "DEPENDS_ON", "MEMBER_OF",
     "ASSIGNED_TO", "PART_OF", "MENTIONS", "DUE_FOR", "TAUGHT_BY",
+    "RELATED_AS",  # a person's relation to the owner: professor, client, family…
 })
 
 # A single message is evidence, not proof. Below this an edge is recorded but marked

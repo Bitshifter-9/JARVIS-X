@@ -44,6 +44,8 @@ class ExtractionOutcome:
     cached: bool = False
     voted: bool = False
     error: str | None = None
+    # True when a plain-text regex read the date because the LLM was unreachable.
+    fallback: bool = False
 
 
 def _load_prompt() -> tuple[str, str]:
@@ -110,6 +112,19 @@ class ExtractionService:
                 )
             )
         except Exception as exc:  # noqa: BLE001
+            # The model is unreachable (usually free-tier quota). A plain date in the
+            # text should still become a task — a missed deadline costs more than a
+            # model call (PLAN.md 12.7).
+            from jarvis.services.extraction.regex_fallback import extract_deadline
+
+            guessed = extract_deadline(body, subject, received_at)
+            if guessed is not None and guessed.has_deadline:
+                resolved = self._resolve(guessed, received_at, timezone)
+                if resolved is not None:
+                    log.info("extraction_regex_fallback", subject=subject[:60])
+                    return ExtractionOutcome(
+                        resolved=resolved, raw=guessed, error=None, fallback=True
+                    )
             log.warning("extraction_failed", error=str(exc)[:200])
             return ExtractionOutcome(resolved=None, raw=None, error=str(exc)[:300])
 

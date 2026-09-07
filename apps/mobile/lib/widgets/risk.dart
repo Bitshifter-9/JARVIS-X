@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 import '../api/models.dart';
+import '../theme.dart';
+import 'gauge.dart';
 
 Color severityColor(String severity, ColorScheme scheme) => switch (severity) {
-      'critical' => scheme.error,
-      'at_risk' => Colors.orange.shade700,
-      _ => Colors.green.shade600,
+      'critical' => JarvisColors.danger,
+      'at_risk' => JarvisColors.warning,
+      _ => JarvisColors.success,
     };
 
 String severityLabel(String severity) => switch (severity) {
@@ -17,7 +20,7 @@ String severityLabel(String severity) => switch (severity) {
 /// The failure-prediction card — the screen the product exists for.
 ///
 /// It leads with the generated explanation rather than the probability, because a
-/// number without its arithmetic invites disbelief.
+/// number without its arithmetic invites disbelief. The gauge makes the number felt.
 class RiskCard extends StatelessWidget {
   const RiskCard({super.key, required this.prediction, this.onOptionSelected});
 
@@ -30,43 +33,47 @@ class RiskCard extends StatelessWidget {
     final color = severityColor(prediction.severity, scheme);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
+            Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              ProbabilityGauge(
+                probability: prediction.probability,
+                color: color,
+                size: 92,
+                label: 'to finish',
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      severityLabel(prediction.severity),
+                      style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
                   ),
-                  child: Text(
-                    severityLabel(prediction.severity),
-                    style: TextStyle(color: color, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${(prediction.probability * 100).round()}%',
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(color: color, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(prediction.explanation, style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                  Text(prediction.explanation,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4)),
+                ]),
+              ),
+            ]),
             if (prediction.options.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text('Recovery options', style: Theme.of(context).textTheme.labelLarge),
+              Text('Ways out', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 8),
-              for (final option in prediction.options)
-                _OptionTile(option: option, onSelected: onOptionSelected),
+              for (final (i, option) in prediction.options.indexed)
+                _OptionTile(option: option, onSelected: onOptionSelected)
+                    .animate(delay: (80 * i).ms)
+                    .fadeIn()
+                    .slideX(begin: 0.05),
             ],
           ],
         ),
@@ -83,27 +90,32 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor:
-            Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-        child: Text(
-          '${(option.probabilityAfter * 100).round()}%',
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: context.surfaces.surface3,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: ListTile(
+        dense: true,
+        leading: CircleAvatar(
+          radius: 20,
+          backgroundColor: scheme.primary.withValues(alpha: 0.14),
+          child: Text(
+            '${(option.probabilityAfter * 100).round()}%',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: scheme.primary),
+          ),
         ),
+        title: Text(option.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          option.requiresApproval ? '${option.detail}  ·  needs someone else' : option.detail,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: onSelected == null ? null : const Icon(Icons.chevron_right),
+        onTap: onSelected == null ? null : () => onSelected!(option),
       ),
-      title: Text(option.title),
-      subtitle: Text(
-        option.requiresApproval
-            ? '${option.detail}  ·  needs someone else'
-            : option.detail,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      onTap: onSelected == null ? null : () => onSelected!(option),
     );
   }
 }

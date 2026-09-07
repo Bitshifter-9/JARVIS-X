@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:jarvis_x/api/cache.dart';
 import 'package:jarvis_x/api/client.dart';
 import 'package:jarvis_x/api/models.dart';
 
@@ -11,6 +12,7 @@ http.Response _json(Object body, {int status = 200}) =>
         headers: {'content-type': 'application/json'});
 
 void main() {
+  cacheTests();
   group('models', () {
     test('a prediction parses its options and severity', () {
       final prediction = Prediction.fromJson({
@@ -236,6 +238,41 @@ void main() {
       final approval = await client.decide('a1', approved: true);
       expect(body!['decided_by'], 'mobile');
       expect(approval.decision, 'approved');
+    });
+  });
+}
+
+// ── the response cache (PLAN.md 11.7) ────────────────────────────────────
+class _MemoryCache extends ResponseCache {
+  _MemoryCache() : super(prefs: null);
+}
+
+void cacheTests() {
+  group('response cache', () {
+    test('a GET is remembered and replayed before the fresh answer', () async {
+      var calls = 0;
+      final client = JarvisClient(
+        baseUrl: 'https://api.test',
+        cache: _MemoryCache(),
+        httpClient: MockClient((request) async {
+          calls++;
+          return http.Response(jsonEncode([{'id': 'r1', 'name': 'Brief $calls'}]), 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final first = await client.routines();
+      expect(first.single['name'], 'Brief 1');
+      final replay = await client
+          .staleWhileRevalidate('/v1/routines', parse: (j) => (j as List).cast<Map>())
+          .toList();
+      expect(replay.length, 2); // cached, then fresh
+      expect(replay.first.single['name'], 'Brief 1');
+      expect(replay.last.single['name'], 'Brief 2');
+      client.clearTokens();
+      final cold = await client
+          .staleWhileRevalidate('/v1/routines', parse: (j) => (j as List).cast<Map>())
+          .toList();
+      expect(cold.length, 1); // sign-out emptied the cache
     });
   });
 }

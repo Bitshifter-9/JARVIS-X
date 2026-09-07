@@ -6,7 +6,8 @@ each is a *view*: nothing here computes a forecast of its own.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from jarvis.db.models.domain import Task
@@ -14,8 +15,14 @@ from jarvis.services.identity import IdentityService
 from jarvis.services.modules import ModuleService
 
 PASSWORD = "correct-horse-battery-staple"  # noqa: S105
-MORNING = datetime(2026, 8, 30, 3, 30, tzinfo=UTC)   # 09:00 IST
-EVENING = datetime(2026, 8, 30, 15, 0, tzinfo=UTC)   # 20:30 IST
+
+# Anchored to *today* in the user's timezone, not to a fixed date. ``update_task`` stamps
+# ``completed_at`` with the wall clock, so a hard-coded day silently stops overlapping the
+# review window the moment the calendar moves past it — the review then counts nothing.
+_IST = ZoneInfo("Asia/Kolkata")
+_TODAY_IST = datetime.now(_IST).date()
+MORNING = datetime.combine(_TODAY_IST, time(9, 0), tzinfo=_IST).astimezone(UTC)
+EVENING = datetime.combine(_TODAY_IST, time(20, 30), tzinfo=_IST).astimezone(UTC)
 
 
 @pytest.fixture

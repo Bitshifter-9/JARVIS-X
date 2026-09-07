@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+var
+vendor
+legacy
+apps/mobile/build
+apps/mobile/.dart_tool
+apps/mobile/android/.gradle
+apps/mobile/macos/Pods
+**/__pycache__
+**/*.pyc
+.pytest_cache

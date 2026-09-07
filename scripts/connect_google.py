@@ -64,6 +64,9 @@ def main() -> int:
     parser.add_argument("--email", default=DEMO_EMAIL)
     parser.add_argument("--password", default=DEMO_PASSWORD)
     parser.add_argument("--write", action="store_true", help="also request send scopes")
+    parser.add_argument(
+        "--youtube", action="store_true", help="also request youtube.upload for the video pipeline"
+    )
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--timeout", type=int, default=300, help="seconds to await the callback")
     args = parser.parse_args()
@@ -78,7 +81,11 @@ def main() -> int:
     )
     print(f"✓ signed in as {args.email}")
 
-    query = "?include_write=true" if args.write else ""
+    flags = [
+        *(["include_write=true"] if args.write else []),
+        *(["include_youtube=true"] if args.youtube else []),
+    ]
+    query = "?" + "&".join(flags) if flags else ""
     result = request(
         f"{api}/v1/connectors/google/authorize{query}", token=tokens["access_token"]
     )

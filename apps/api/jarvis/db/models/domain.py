@@ -88,6 +88,9 @@ class Task(UUIDPrimaryKey, Timestamps, Base):
     # sees a mismatch, and exits without alerting (blueprint §7).
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A recurring deadline: "daily" | "weekly" | "monthly" | "weekdays". When one is
+    # completed, the next is created automatically (FEATURES-50 3).
+    recurrence: Mapped[str | None] = mapped_column(String(16))
 
 
 class TaskDependency(Timestamps, Base):

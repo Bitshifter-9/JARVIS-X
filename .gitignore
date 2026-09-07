@@ -83,3 +83,11 @@ apps/mobile/build/
 apps/mobile/.dart_tool/
 apps/mobile/android/.gradle/
 apps/mobile/android/local.properties
+
+# YouTube pipeline renders (large mp4/mp3 working files)
+var/
+
+# lip-sync vendor checkout with its own venv + checkpoints
+vendor/
+# Service-account files the deploy script ships to the server
+secrets/

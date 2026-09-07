@@ -29,15 +29,20 @@ FREE = Price(0.0, 0.0)
 # misconfiguration cannot silently invent spend — but a paid provider always
 # falls back to PAID_UNKNOWN, so it cannot silently hide it either.
 PRICES: dict[str, Price] = {
-    # Groq free tier
+    # Groq free tier (llama-3.3-70b-versatile and llama-3.1-8b-instant were retired in
+    # August 2026; kept so old llm_calls rows still price to zero)
+    "groq:openai/gpt-oss-120b": FREE,
+    "groq:openai/gpt-oss-20b": FREE,
     "groq:llama-3.3-70b-versatile": FREE,
     "groq:llama-3.1-8b-instant": FREE,
     # Gemini free tier
     "gemini:gemini-2.5-flash": FREE,
     "gemini:gemini-2.5-flash-lite": FREE,
+    "gemini:gemini-3.6-flash": FREE,
     # OpenRouter ":free" variants
     "openrouter:deepseek/deepseek-chat-v3:free": FREE,
     "openrouter:meta-llama/llama-3.3-70b-instruct:free": FREE,
+    "openrouter:z-ai/glm-5.2:free": FREE,
     # OpenRouter paid
     "openrouter:anthropic/claude-haiku-4.5": Price(1.0 * USD_TO_INR, 5.0 * USD_TO_INR),
     "openrouter:deepseek/deepseek-chat-v3": Price(0.28 * USD_TO_INR, 0.88 * USD_TO_INR),

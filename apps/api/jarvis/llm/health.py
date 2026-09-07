@@ -89,6 +89,23 @@ class ProviderHealthStore:
         )
         log.warning("llm_provider_failure", provider=provider, error=error[:200])
 
+    async def open_breaker(self, provider: str, *, seconds: int, error: str) -> None:
+        """Open the breaker now — for a rejected key, retrying every call is pointless."""
+        await self.session.execute(
+            text("""
+                INSERT INTO provider_health
+                    (provider, consecutive_failures, last_error, total_calls, total_failures,
+                     cooldown_until, created_at, updated_at)
+                VALUES (:p, 1, :err, 1, 1, now() + make_interval(secs => :secs), now(), now())
+                ON CONFLICT (provider) DO UPDATE SET
+                    last_error     = :err,
+                    cooldown_until = now() + make_interval(secs => :secs),
+                    updated_at     = now()
+            """),
+            {"p": provider, "err": error[:2000], "secs": seconds},
+        )
+        log.warning("llm_provider_breaker_opened", provider=provider, seconds=seconds)
+
     async def reset(self, provider: str) -> None:
         """Close the breaker manually — for an operator, or for a test."""
         await self.session.execute(

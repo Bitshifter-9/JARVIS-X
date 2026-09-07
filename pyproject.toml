@@ -36,9 +36,50 @@ dependencies = [
     "google-api-python-client>=2.199",
     # The Mac helper dials out over WebSocket; no inbound port is ever opened.
     "websockets>=13.0",
+    # YouTube pipeline: free neural TTS (word timings ride along with the audio,
+    # so captions need no Whisper) and keyless web research.
+    "edge-tts>=7.0",
+    "ddgs>=9.0",
 ]
 
 [project.optional-dependencies]
+# Voice-cloned avatar mode: F5-TTS speaks the script in the user's voice, and
+# faster-whisper recovers word timings for captions (edge-tts gives those for free,
+# a cloned voice does not).
+# Local image generation for video imagery: SDXL + SDXL-Lightning on the GPU.
+# The free hosted tiers cap near 576px, which upscales into soft, blocky frames.
+images = [
+    "diffusers>=0.31",
+    "accelerate>=1.0",
+    "safetensors>=0.4",
+    "peft>=0.13",          # diffusers needs it to load the Lightning LoRA
+    "torch<2.9",
+]
+avatar = [
+    "f5-tts>=1.0",
+    "faster-whisper>=1.0",
+    # torchaudio >=2.9 decodes only through torchcodec, which dlopens ffmpeg 4-7
+    # shared libraries that a Homebrew ffmpeg 9 does not provide. 2.8 still ships
+    # the self-contained soundfile backend.
+    "torch<2.9",
+    "torchaudio<2.9",
+    "soundfile>=0.12",
+]
+# "Hey Jarvis" on the Mac (apps/mac-node, `python -m macnode voice`): a wake-word model
+# that listens for one phrase, and Whisper on-device so audio never leaves the machine.
+# openWakeWord itself is installed separately (`uv pip install openwakeword`): its
+# Linux dependency (tflite-runtime) has no Python 3.12 wheel, and a universal lock
+# cannot carry it. The voice command says so if it is missing.
+voice = [
+    "sounddevice>=0.5",
+    "numpy>=1.26",
+    "faster-whisper>=1.0",
+]
+# Hand gestures on the Mac (PLAN.md 10.8): MediaPipe Hands over the webcam, on-device.
+gestures = [
+    "mediapipe>=0.10",
+    "opencv-python>=4.9",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

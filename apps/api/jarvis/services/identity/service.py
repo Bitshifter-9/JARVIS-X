@@ -52,6 +52,11 @@ class IdentityService:
         self.session = session
 
     # ── users ──────────────────────────────────────────────────────────
+    async def find_by_email(self, email: str) -> User | None:
+        return await self.session.scalar(
+            select(User).where(User.email == email.strip().lower())
+        )
+
     async def register(
         self, email: str, password: str, *, display_name: str | None = None
     ) -> User:

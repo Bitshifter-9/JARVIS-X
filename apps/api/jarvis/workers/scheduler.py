@@ -21,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jarvis.core.config import get_settings
 from jarvis.core.ids import new_correlation_id
 from jarvis.core.logging import get_logger
+from jarvis.core.overrides import apply_overrides
 from jarvis.db.queue import JobQueue
 from jarvis.db.session import session_scope
+from jarvis.workers.pulse import pulse
 
 log = get_logger(__name__)
 
@@ -34,10 +36,11 @@ class TickResult:
     fired: int
     stale: int
     checked: int
+    routines: int = 0
 
     @property
     def quiet(self) -> bool:
-        return self.checked == 0
+        return self.checked == 0 and self.routines == 0
 
 
 class Scheduler:
@@ -84,10 +87,13 @@ class Scheduler:
             await self._fire(row)
             fired += 1
 
+        from jarvis.services.routines import RoutineService
+
+        routines = await RoutineService(self.session).tick(now=moment)
         await self.session.flush()
         if due:
             log.info("scheduler_tick", checked=len(due), fired=fired, stale=stale)
-        return TickResult(fired=fired, stale=stale, checked=len(due))
+        return TickResult(fired=fired, stale=stale, checked=len(due), routines=routines)
 
     @staticmethod
     def _is_stale(row) -> bool:  # noqa: ANN001
@@ -151,6 +157,8 @@ async def run_forever(*, tick_seconds: float | None = None) -> None:
     while True:
         try:
             async with session_scope() as session:
+                await apply_overrides(session)
+                await pulse(session, "scheduler")
                 await Scheduler(session).tick()
         except Exception as exc:  # noqa: BLE001 — a tick failing must not stop the clock
             log.error("scheduler_tick_failed", error=str(exc)[:300])

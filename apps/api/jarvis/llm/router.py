@@ -16,8 +16,10 @@ end to end on free providers. ``tests/unit/test_llm_router.py`` asserts exactly 
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Sequence
+from contextlib import contextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,12 +50,15 @@ from jarvis.llm.types import (
 log = get_logger(__name__)
 
 # Provider order per call class. Accuracy leads for EXTRACT; latency leads elsewhere.
+# Ollama is last everywhere: when every hosted free tier is rate-limited or a key has
+# lapsed, the system degrades to local inference instead of stopping. Slower and
+# weaker, but never exhausted and never billed.
 DEFAULT_CASCADE: dict[CallClass, tuple[str, ...]] = {
-    CallClass.CLASSIFY: ("groq", "gemini", "openrouter_free", "openrouter_paid"),
-    CallClass.PLAN: ("groq", "gemini", "openrouter_free", "openrouter_paid"),
-    CallClass.REFLECT: ("groq", "gemini", "openrouter_free", "openrouter_paid"),
-    CallClass.CHAT: ("groq", "gemini", "openrouter_free"),
-    CallClass.EXTRACT: ("gemini", "groq", "openrouter_paid"),
+    CallClass.CLASSIFY: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
+    CallClass.PLAN: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
+    CallClass.REFLECT: ("groq", "gemini", "openrouter_free", "openrouter_paid", "ollama"),
+    CallClass.CHAT: ("groq", "gemini", "openrouter_free", "ollama"),
+    CallClass.EXTRACT: ("gemini", "groq", "openrouter_paid", "ollama"),
 }
 
 
@@ -68,6 +73,19 @@ def default_providers() -> dict[str, LiteLLMProvider]:
             OllamaProvider(),
         )
     }
+
+
+def _key_rejected(exc: Exception) -> bool:
+    """An invalid or revoked API key: every retry would fail the same way."""
+    text = str(exc).lower()
+    return "rejected credentials" in text or "invalid api key" in text or "invalid_api_key" in text
+
+
+def _quota_exhausted(exc: Exception) -> bool:
+    """A daily quota is spent (429). Hammering it burns nothing but log lines; rest it a
+    few minutes so the cascade fails fast to the next provider or the regex fallback."""
+    text = str(exc).lower()
+    return "exceeded your current quota" in text or "rate limit reached" in text
 
 
 class LLMRouter:
@@ -115,7 +133,12 @@ class LLMRouter:
                 continue
             except LLMError as exc:
                 failures[name] = f"{type(exc).__name__}: {exc}"
-                await self.health.record_failure(name, str(exc))
+                if _key_rejected(exc):
+                    await self.health.open_breaker(name, seconds=3600, error=str(exc))
+                elif _quota_exhausted(exc):
+                    await self.health.open_breaker(name, seconds=300, error=str(exc))
+                else:
+                    await self.health.record_failure(name, str(exc))
                 await self._record_call(
                     request, provider, status="error", error=str(exc), attempt=attempt
                 )
@@ -159,9 +182,7 @@ class LLMRouter:
         if provider.is_paid and not budget.paid_enabled:
             return "paid inference disabled"
         if provider.is_paid and not budget.allows_paid:
-            return (
-                f"budget exhausted (₹{budget.spent_inr:.2f} of ₹{budget.limit_inr:.2f} used)"
-            )
+            return f"budget exhausted (₹{budget.spent_inr:.2f} of ₹{budget.limit_inr:.2f} used)"
         if (until := cooling.get(provider.name)) is not None:
             return f"circuit open until {until.isoformat()}"
         return None
@@ -209,13 +230,100 @@ class LLMRouter:
 
     # ── convenience ────────────────────────────────────────────────────
     async def chat(
-        self, messages: Sequence, *, user_id: uuid.UUID | None = None, **kwargs
+        self,
+        messages: Sequence,
+        *,
+        user_id: uuid.UUID | None = None,
+        prefer: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
-        return await self.generate(
-            LLMRequest(
-                call_class=CallClass.CHAT, messages=list(messages), user_id=user_id, **kwargs
-            )
+        request = LLMRequest(
+            call_class=CallClass.CHAT, messages=list(messages), user_id=user_id, **kwargs
         )
+        if prefer:
+            with self._preferred(CallClass.CHAT, prefer):
+                return await self.generate(request)
+        return await self.generate(request)
+
+    async def chat_stream(  # noqa: ANN201 — async generator of str deltas
+        self,
+        messages: Sequence,
+        *,
+        user_id: uuid.UUID | None = None,
+        prefer: str | None = None,
+        **kwargs,
+    ):
+        """Stream a chat reply. The cascade applies until the first token arrives;
+        after that the provider that started answers to the end."""
+        request = LLMRequest(
+            call_class=CallClass.CHAT, messages=list(messages), user_id=user_id, **kwargs
+        )
+        order = list(self.cascade.get(CallClass.CHAT, ()))
+        if prefer and prefer in order:
+            order.remove(prefer)
+            order.insert(0, prefer)
+        budget = await self.budget.status()
+        cooling = await self.health.cooling_down()
+        failures: dict[str, str] = {}
+
+        for name in order:
+            provider = self.providers.get(name)
+            if provider is None:
+                failures[name] = "not registered"
+                continue
+            if skip := self._skip_reason(provider, request, budget, cooling):
+                failures[name] = skip
+                continue
+            produced: list[str] = []
+            started = time.perf_counter()
+            # Deltas carry no provenance; the caller reads this after the stream ends.
+            self.last_stream_provider = name
+            try:
+                async for delta in provider.stream(request):
+                    produced.append(delta)
+                    yield delta
+            except LLMError as exc:
+                if produced:
+                    # Mid-stream failure: the client has partial text; do not restart
+                    # with another provider and duplicate it.
+                    log.warning("llm_stream_broke", provider=name, reason=str(exc)[:200])
+                    await self.health.record_failure(name, str(exc))
+                    return
+                failures[name] = f"{type(exc).__name__}: {exc}"
+                await self.health.record_failure(name, str(exc))
+                continue
+            text = "".join(produced)
+            await self.health.record_success(name)
+            await self._record_call(
+                request,
+                provider,
+                status="ok",
+                response=LLMResponse(
+                    text=text,
+                    provider=name,
+                    model=provider.model,
+                    input_tokens=sum(len(m.content) for m in request.messages) // 4,
+                    output_tokens=len(text) // 4,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                ),
+                attempt=1,
+            )
+            return
+        raise AllProvidersFailed(request.call_class, failures)
+
+    @contextmanager
+    def _preferred(self, call_class: CallClass, name: str):  # noqa: ANN202
+        """Temporarily put one provider first in a call class's cascade."""
+        order = list(self.cascade.get(call_class, ()))
+        original = dict(self.cascade)
+        if name in order:
+            order.remove(name)
+            order.insert(0, name)
+            self.cascade = {**self.cascade, call_class: tuple(order)}
+        try:
+            yield
+        finally:
+            self.cascade = original
 
     async def extract(
         self, messages: Sequence, schema: dict, *, user_id: uuid.UUID | None = None, **kwargs

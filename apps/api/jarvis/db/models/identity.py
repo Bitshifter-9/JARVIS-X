@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from jarvis.db.base import Base, Timestamps, UUIDPrimaryKey
@@ -40,9 +40,7 @@ class Identity(UUIDPrimaryKey, Timestamps, Base):
     """
 
     __tablename__ = "identities"
-    __table_args__ = (
-        Index("uq_identities_provider_subject", "provider", "subject", unique=True),
-    )
+    __table_args__ = (Index("uq_identities_provider_subject", "provider", "subject", unique=True),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -107,3 +105,14 @@ class OAuthCode(UUIDPrimaryKey, Timestamps, Base):
     code_challenge_method: Mapped[str | None] = mapped_column(String(8))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PendingLogin(Timestamps, Base):
+    """A Sign-in-with-Google attempt in flight: the app starts it, the browser finishes
+    it, the app polls for it. In Postgres rather than process memory so a deploy, a
+    restart or a second API process in the middle of the flow does not lose it."""
+
+    __tablename__ = "pending_logins"
+
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tokens: Mapped[dict | None] = mapped_column(JSONB)

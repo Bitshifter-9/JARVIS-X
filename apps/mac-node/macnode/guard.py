@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from jarvis.services.device.keys import verify
 from jarvis.services.device.protocol import JobEnvelope, RejectReason
 
+WHATSAPP = "net.whatsapp.WhatsApp"
+
 
 @dataclass(frozen=True)
 class GuardVerdict:
@@ -65,10 +67,40 @@ class LocalPolicy:
             "mac.press_button",
             "mac.capture_window",
             "mac.file_exists",
+            "mac.open_url",
+            "mac.open_file",
+            "mac.find_files",
+            "mac.clipboard_read",
+            "mac.clipboard_write",
+            "mac.notify",
+            "mac.lock_screen",
+            "mac.set_volume",
+            "mac.media",
+            "mac.type_text",
+            "mac.press_key",
+            "mac.capture_screen",
+            "mac.send_file",
+            "mac.whatsapp_send",
+            "mac.set_setting",
+            "mac.describe_screen",
+            "mac.click",
+            "mac.say",
+            "mac.system_info",
         }
     )
+    allowed_settings: set[str] = field(
+        default_factory=lambda: {"wifi", "bluetooth", "dark_mode", "do_not_disturb", "brightness"}
+    )
     allowed_templates: set[str] = field(default_factory=set)
+    # Schemes this Mac will hand to the OS. file:// would open anything; javascript:
+    # is not a scheme an app owns.
+    allowed_url_schemes: set[str] = field(
+        default_factory=lambda: {"https", "http", "mailto", "tel", "whatsapp", "maps", "facetime"}
+    )
     stopped: bool = False
+
+    def scheme_allowed(self, url: str) -> bool:
+        return url.split(":", 1)[0].lower() in self.allowed_url_schemes
 
 
 class JobGuard:
@@ -86,9 +118,7 @@ class JobGuard:
             return GuardVerdict(False, RejectReason.STOPPED, "helper is stopped")
 
         if not verify(self.server_public_pem, envelope.signing_payload(), envelope.signature):
-            return GuardVerdict(
-                False, RejectReason.BAD_SIGNATURE, "job signature did not verify"
-            )
+            return GuardVerdict(False, RejectReason.BAD_SIGNATURE, "job signature did not verify")
 
         if envelope.is_expired(moment):
             return GuardVerdict(
@@ -105,14 +135,47 @@ class JobGuard:
                 False, RejectReason.UNKNOWN_ACTION, f"{envelope.action} is not enabled here"
             )
 
+        if envelope.action in ("mac.open_url",) and not self.policy.scheme_allowed(
+            str(envelope.args.get("url", ""))
+        ):
+            return GuardVerdict(
+                False,
+                RejectReason.NOT_ALLOWLISTED,
+                f"scheme of {str(envelope.args.get('url', ''))[:40]} is not enabled here",
+            )
+
+        if envelope.action == "mac.set_setting" and (
+            str(envelope.args.get("key", "")).lower() not in self.policy.allowed_settings
+        ):
+            return GuardVerdict(
+                False,
+                RejectReason.NOT_ALLOWLISTED,
+                f"setting {str(envelope.args.get('key', ''))[:30]} is not enabled here",
+            )
+
+        # Driving WhatsApp is driving an app: it must be on this Mac's allowlist.
+        if (
+            envelope.action == "mac.whatsapp_send"
+            and WHATSAPP not in self.policy.allowed_bundle_ids
+        ):
+            return GuardVerdict(
+                False, RejectReason.NOT_ALLOWLISTED, f"{WHATSAPP} is not in this Mac's allowlist"
+            )
+
         if envelope.action in (
-            "mac.open_app", "mac.focus_app", "mac.read_ui", "mac.press_button",
+            "mac.open_app",
+            "mac.focus_app",
+            "mac.read_ui",
+            "mac.press_button",
             "mac.capture_window",
+            "mac.type_text",
+            "mac.press_key",
         ):
             bundle_id = envelope.args.get("bundle_id")
             if bundle_id not in self.policy.allowed_bundle_ids:
                 return GuardVerdict(
-                    False, RejectReason.NOT_ALLOWLISTED,
+                    False,
+                    RejectReason.NOT_ALLOWLISTED,
                     f"{bundle_id} is not in this Mac's allowlist",
                 )
 
@@ -120,7 +183,8 @@ class JobGuard:
             template = envelope.args.get("template")
             if template not in self.policy.allowed_templates:
                 return GuardVerdict(
-                    False, RejectReason.NOT_ALLOWLISTED,
+                    False,
+                    RejectReason.NOT_ALLOWLISTED,
                     f"template {template} is not enabled here",
                 )
 

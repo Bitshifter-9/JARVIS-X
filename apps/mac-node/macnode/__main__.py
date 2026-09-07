@@ -1,7 +1,7 @@
 """``python -m macnode`` — pair this Mac, or run the helper.
 
-    python -m macnode pair  --api https://jarvis.example.com --email you@example.com
-    python -m macnode run   --api https://jarvis.example.com --email you@example.com
+python -m macnode pair  --api https://jarvis.example.com --email you@example.com
+python -m macnode run   --api https://jarvis.example.com --email you@example.com
 """
 
 from __future__ import annotations
@@ -24,6 +24,9 @@ DEFAULT_BUNDLES = [
     "com.google.Chrome",
     "com.microsoft.VSCode",
     "com.apple.Safari",
+    "net.whatsapp.WhatsApp",
+    "com.apple.mail",
+    "com.apple.Notes",
 ]
 
 
@@ -49,10 +52,14 @@ def pair(args: argparse.Namespace) -> int:
         from cryptography.hazmat.primitives import serialization
 
         key = serialization.load_pem_private_key(private_pem.encode(), password=None)
-        public_pem = key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode()
+        public_pem = (
+            key.public_key()
+            .public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            .decode()
+        )
         print("Reusing the existing device key.")
 
     started = httpx.post(
@@ -81,9 +88,9 @@ def pair(args: argparse.Namespace) -> int:
     completed.raise_for_status()
     device = completed.json()
 
-    server_key = httpx.get(
-        f"{args.api}/v1/devices/server-key", headers=headers, timeout=15
-    ).json()["public_key_pem"]
+    server_key = httpx.get(f"{args.api}/v1/devices/server-key", headers=headers, timeout=15).json()[
+        "public_key_pem"
+    ]
 
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(
@@ -126,6 +133,8 @@ def run(args: argparse.Namespace) -> int:
             device_private_pem=private_pem,
             server_public_pem=config["server_public_pem"],
             allowed_bundle_ids=set(config["allowed_bundle_ids"]),
+            api_http_url=api,
+            share_activity=bool(getattr(args, "share_activity", False)),
         )
     )
     print(f"Connecting as device {config['device_id']}… Ctrl-C to stop.")
@@ -133,6 +142,44 @@ def run(args: argparse.Namespace) -> int:
         asyncio.run(node.run_forever())
     except KeyboardInterrupt:
         node.stop()
+        print("\nStopped.")
+    return 0
+
+
+def voice(args: argparse.Namespace) -> int:
+    """Always-on wake word → speech → Jarvis → spoken reply. Ctrl-C to stop."""
+    from macnode.voice import run_voice
+
+    config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+    api = args.api or config.get("api")
+    email = args.email or config.get("email")
+    if not (api and email):
+        print("Pass --api and --email, or pair first.", file=sys.stderr)
+        return 1
+    token = _login(api, email)
+    print('Listening for "Hey Jarvis"… Ctrl-C to stop.')
+    try:
+        run_voice(api=api, access_token=token, wake_model=args.wake, whisper_model=args.whisper)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    return 0
+
+
+def gestures(args: argparse.Namespace) -> int:
+    """Webcam gestures: palm stops speech, thumbs decide the one pending approval."""
+    from macnode.gestures import run_gestures
+
+    config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+    api = args.api or config.get("api")
+    email = args.email or config.get("email")
+    if not (api and email):
+        print("Pass --api and --email, or pair first.", file=sys.stderr)
+        return 1
+    token = _login(api, email)
+    print("Watching for gestures… Ctrl-C to stop.")
+    try:
+        run_gestures(api=api, access_token=token, camera=args.camera)
+    except KeyboardInterrupt:
         print("\nStopped.")
     return 0
 
@@ -149,9 +196,27 @@ def main() -> int:
     pair_cmd.set_defaults(func=pair)
 
     run_cmd = sub.add_parser("run", help="run the helper")
+    run_cmd.add_argument(
+        "--share-activity",
+        action="store_true",
+        help="post the frontmost app and window title every 30 s (titles only, 30 days)",
+    )
     run_cmd.add_argument("--api")
     run_cmd.add_argument("--email")
     run_cmd.set_defaults(func=run)
+
+    voice_cmd = sub.add_parser("voice", help='always-on "Hey Jarvis" on this Mac')
+    voice_cmd.add_argument("--api")
+    voice_cmd.add_argument("--email")
+    voice_cmd.add_argument("--wake", default="hey_jarvis", help="openWakeWord model name")
+    voice_cmd.add_argument("--whisper", default="base", help="faster-whisper model size")
+    voice_cmd.set_defaults(func=voice)
+
+    gestures_cmd = sub.add_parser("gestures", help="webcam gestures on this Mac")
+    gestures_cmd.add_argument("--api")
+    gestures_cmd.add_argument("--email")
+    gestures_cmd.add_argument("--camera", type=int, default=0)
+    gestures_cmd.set_defaults(func=gestures)
 
     args = parser.parse_args()
     return args.func(args)

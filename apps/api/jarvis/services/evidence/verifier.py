@@ -35,9 +35,7 @@ class CheckResult:
         return self.verdict is Verdict.VERIFIED
 
 
-def check_requirement(
-    requirement: EvidenceRequirement, observed: dict[str, Any]
-) -> CheckResult:
+def check_requirement(requirement: EvidenceRequirement, observed: dict[str, Any]) -> CheckResult:
     """Check one requirement against observed state.
 
     A requirement whose observation is simply *absent* is ``INCONCLUSIVE``, not
@@ -58,7 +56,8 @@ def check_requirement(
             return CheckResult(
                 kind,
                 Verdict.VERIFIED if ok else Verdict.FAILED,
-                expected, {"pid": pid, "is_running": running},
+                expected,
+                {"pid": pid, "is_running": running},
                 "process observed running" if ok else "process not running",
             )
 
@@ -72,7 +71,10 @@ def check_requirement(
                 )
             ok = actual == expected
             return CheckResult(
-                kind, Verdict.VERIFIED if ok else Verdict.FAILED, expected, actual,
+                kind,
+                Verdict.VERIFIED if ok else Verdict.FAILED,
+                expected,
+                actual,
                 "expected app is frontmost" if ok else f"{actual} is frontmost instead",
             )
 
@@ -99,7 +101,10 @@ def check_requirement(
                 )
             ok = _urls_equivalent(str(expected), str(actual))
             return CheckResult(
-                kind, Verdict.VERIFIED if ok else Verdict.FAILED, expected, actual,
+                kind,
+                Verdict.VERIFIED if ok else Verdict.FAILED,
+                expected,
+                actual,
                 "landed on the expected page" if ok else "redirected elsewhere",
             )
 
@@ -124,7 +129,10 @@ def check_requirement(
             actual = observed.get("provider_object_id")
             if not actual:
                 return CheckResult(
-                    kind, Verdict.FAILED, expected, None,
+                    kind,
+                    Verdict.FAILED,
+                    expected,
+                    None,
                     "the provider returned no object id, so nothing is known to exist",
                 )
             return CheckResult(kind, Verdict.VERIFIED, expected, actual)
@@ -137,12 +145,54 @@ def check_requirement(
                 kind, Verdict.VERIFIED if exists else Verdict.FAILED, expected, exists
             )
 
+        case "url_opened":
+            opened = observed.get("opened")
+            if opened is None:
+                return CheckResult(kind, Verdict.INCONCLUSIVE, expected, None, "not attempted")
+            landed = observed.get("opened_url")
+            if not opened:
+                return CheckResult(kind, Verdict.FAILED, expected, landed, "the OS refused the URL")
+            if expected is not None and landed and not _urls_equivalent(str(expected), str(landed)):
+                return CheckResult(kind, Verdict.FAILED, expected, landed, "a different URL opened")
+            return CheckResult(
+                kind, Verdict.VERIFIED, expected, landed or True, "URL handed to the OS"
+            )
+
+        case "setting_applied":
+            # The helper re-reads the setting after changing it; the re-read is the
+            # evidence, never the command's exit code.
+            state = observed.get("state")
+            if state is None:
+                return CheckResult(kind, Verdict.INCONCLUSIVE, expected, None, "state not re-read")
+            if expected is not None and not _same_setting(expected, state):
+                return CheckResult(kind, Verdict.FAILED, expected, state, "setting did not take")
+            return CheckResult(kind, Verdict.VERIFIED, expected, state, "setting re-read")
+
+        case "key_pressed":
+            pressed = observed.get("pressed_key")
+            if pressed is None:
+                return CheckResult(kind, Verdict.INCONCLUSIVE, expected, None, "no key press data")
+            return CheckResult(
+                kind, Verdict.VERIFIED if pressed else Verdict.FAILED, expected, pressed
+            )
+
+        case "artifact_uploaded":
+            # The server's own artifact id, minted when the bytes arrived — the device
+            # cannot claim an upload that did not happen.
+            artifact_id = observed.get("artifact_id")
+            if not artifact_id:
+                return CheckResult(
+                    kind, Verdict.FAILED, expected, None, "no artifact reached the server"
+                )
+            return CheckResult(kind, Verdict.VERIFIED, expected, artifact_id, "artifact stored")
+
         case "screenshot":
             digest = observed.get("digest")
             return CheckResult(
                 kind,
                 Verdict.VERIFIED if digest else Verdict.INCONCLUSIVE,
-                expected, digest,
+                expected,
+                digest,
                 "screenshot captured" if digest else "no screenshot",
             )
 
@@ -152,6 +202,19 @@ def check_requirement(
             return CheckResult(
                 kind, Verdict.FAILED, expected, None, f"unknown evidence kind: {kind}"
             )
+
+
+def _same_setting(expected: Any, actual: Any) -> bool:
+    """on/off/true/false/1/0 are one family; numbers match within a couple of points."""
+    truthy = {"on", "true", "1", "yes"}
+    falsy = {"off", "false", "0", "no"}
+    e, a = str(expected).strip().lower(), str(actual).strip().lower()
+    if e in truthy | falsy and a in truthy | falsy:
+        return (e in truthy) == (a in truthy)
+    try:
+        return abs(float(e) - float(a)) <= 2
+    except ValueError:
+        return e == a
 
 
 def _urls_equivalent(expected: str, actual: str) -> bool:

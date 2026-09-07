@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -147,6 +148,47 @@ class AgentRuntime:
             RunStatus.AWAITING_APPROVAL.value if pending else state.get("status", "running")
         )
         await self.session.flush()
+
+
+_SHARED: dict[str, Any] = {}
+_SHARED_LOCK = asyncio.Lock()
+
+
+async def shared_checkpointer():  # noqa: ANN201
+    """One checkpointer per process, opened on first use and kept for the process's life.
+
+    Its psycopg pool is expensive to build, and a request-scoped one would also break
+    resumption: the checkpoint written by one request must be readable by the next.
+    """
+    async with _SHARED_LOCK:
+        if "saver" not in _SHARED:
+            cm = postgres_checkpointer()
+            _SHARED["saver"] = await cm.__aenter__()
+            _SHARED["cm"] = cm
+        return _SHARED["saver"]
+
+
+def describe(handle: RunHandle) -> str:
+    """What to tell a person about a finished (or suspended) run, in one sentence."""
+    state = handle.state
+    if handle.awaiting_approval:
+        tool = (handle.interrupt or {}).get("tool", "an action")
+        return f"I need your approval to run {tool} — it is waiting in Approvals."
+    if state.get("answer"):
+        return str(state["answer"])
+    status, reason = state.get("status"), state.get("stop_reason")
+    if status == "succeeded":
+        done = [
+            n.get("tool")
+            for n in state.get("timeline", [])
+            if n.get("stage") == "execute" and n.get("tool")
+        ]
+        return f"Done: {', '.join(done)}." if done else "Done."
+    if status == "awaiting_user":
+        return "That did not verify and I could not find a safe alternative — your call."
+    if reason == "policy_denied" or state.get("policy_decision") == "deny":
+        return f"I can't do that: {state.get('policy_reason') or 'policy denied it'}."
+    return f"Stopped: {reason or status}."
 
 
 @asynccontextmanager

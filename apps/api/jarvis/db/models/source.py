@@ -22,8 +22,13 @@ class SourceAccount(UUIDPrimaryKey, Timestamps, Base):
 
     __tablename__ = "source_accounts"
     __table_args__ = (
-        Index("uq_source_accounts_user_provider_ext", "user_id", "provider", "external_id",
-              unique=True),
+        Index(
+            "uq_source_accounts_user_provider_ext",
+            "user_id",
+            "provider",
+            "external_id",
+            unique=True,
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -40,6 +45,9 @@ class SourceAccount(UUIDPrimaryKey, Timestamps, Base):
     credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the last poll found, and what went wrong — the Connections screen's row.
+    last_sync_result: Mapped[dict | None] = mapped_column(JSONB)
+    last_error: Mapped[str | None] = mapped_column(Text)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -72,8 +80,18 @@ class SourceObject(UUIDPrimaryKey, Timestamps, Base):
 
     __tablename__ = "source_objects"
     __table_args__ = (
-        Index("uq_source_objects_provider_account_object", "provider", "account_id", "object_id",
-              unique=True),
+        # NULLS NOT DISTINCT: a Slack message or a Canvas assignment has no account row,
+        # and Postgres's default treats every NULL as unique — so the upsert that keeps
+        # "one row per provider object" would silently insert a duplicate on every
+        # redelivery for exactly the providers that push.
+        Index(
+            "uq_source_objects_provider_account_object",
+            "provider",
+            "account_id",
+            "object_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(

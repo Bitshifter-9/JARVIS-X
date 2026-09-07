@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="whatsapp_send_description">Lets JARVIS tap WhatsApp\'s Send button once, only when you asked it to send a message. It reads nothing else.</string>
+</resources>

@@ -21,7 +21,10 @@ FALLBACK_PATH = Path.home() / ".jarvis-x" / "device_key.pem"
 def _security(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(  # noqa: S603 — fixed argv, no shell
         ["/usr/bin/security", *args],
-        input=input_text, capture_output=True, text=True, check=False,
+        input=input_text,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 
@@ -37,8 +40,14 @@ def load_private_key(account: str = "default") -> str | None:
 def store_private_key(private_pem: str, account: str = "default") -> str:
     """Store the key, returning where it went so the caller can say so out loud."""
     result = _security(
-        "add-generic-password", "-s", SERVICE, "-a", account,
-        "-w", private_pem.replace("\n", "\\n"), "-U",
+        "add-generic-password",
+        "-s",
+        SERVICE,
+        "-a",
+        account,
+        "-w",
+        private_pem.replace("\n", "\\n"),
+        "-U",
     )
     if result.returncode == 0:
         return "keychain"

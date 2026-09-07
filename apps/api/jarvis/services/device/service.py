@@ -114,6 +114,22 @@ class DeviceService:
 
         device.paired_at = datetime.now(UTC)
         device.last_seen_at = datetime.now(UTC)
+        # The same Mac or phone pairing again (a reinstall, a wiped keychain) replaces its
+        # old row instead of piling up "This phone" ×4: one live device per platform+name.
+        stale = (
+            await self.session.scalars(
+                select(Device).where(
+                    Device.user_id == user_id,
+                    Device.platform == device.platform,
+                    Device.name == device.name,
+                    Device.id != device.id,
+                    Device.revoked_at.is_(None),
+                )
+            )
+        ).all()
+        for old in stale:
+            old.revoked_at = datetime.now(UTC)
+            log.info("device_replaced", old=str(old.id), new=str(device.id), name=device.name)
         self.session.add(
             AuditLog(
                 user_id=user_id, actor="user", action="device.paired",

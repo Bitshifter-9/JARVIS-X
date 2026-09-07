@@ -26,6 +26,18 @@ WRITE_SCOPES = [
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/calendar.events",
 ]
+YOUTUBE_SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    # Replying to comments needs force-ssl; the analytics loop needs the report scope.
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+]
+# Requested only when the user connects Classroom: a school account that never
+# authorizes this app would otherwise fail the whole consent screen.
+CLASSROOM_SCOPES = [
+    "https://www.googleapis.com/auth/classroom.courses.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+]
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 — an endpoint, not a secret
 
@@ -39,11 +51,22 @@ class GoogleTokens:
     email: str | None = None
 
 
-def authorization_url(state: str, *, include_write: bool = False) -> str:
+def authorization_url(
+    state: str,
+    *,
+    include_write: bool = False,
+    include_youtube: bool = False,
+    include_classroom: bool = False,
+) -> str:
     from urllib.parse import urlencode
 
     s = get_settings()
-    scopes = READ_SCOPES + (WRITE_SCOPES if include_write else [])
+    scopes = (
+        READ_SCOPES
+        + (WRITE_SCOPES if include_write else [])
+        + (YOUTUBE_SCOPES if include_youtube else [])
+        + (CLASSROOM_SCOPES if include_classroom else [])
+    )
     return f"{AUTH_URL}?" + urlencode(
         {
             "client_id": s.google_client_id,
@@ -126,34 +149,63 @@ class TokenStore:
 
     async def access_token(self, account_id: uuid.UUID) -> str:
         account = await self.get_account(account_id)
-        tokens = account.raw or {} if hasattr(account, "raw") else {}
-        stored = getattr(account, "_tokens", None) or tokens
+        stored = account.credentials or {}
         expires_at = stored.get("expires_at")
-        if expires_at and datetime.fromisoformat(expires_at) > datetime.now(UTC) + timedelta(
-            seconds=60
+        if (
+            stored.get("access_token")
+            and expires_at
+            and datetime.fromisoformat(expires_at) > datetime.now(UTC) + timedelta(seconds=60)
         ):
             return stored["access_token"]
 
-        refreshed = await refresh_access_token(stored["refresh_token"])
+        refresh_token = stored.get("refresh_token")
+        if not refresh_token:
+            raise Forbidden("reauth_required: no refresh token stored; reconnect Google")
+        refreshed = await refresh_access_token(refresh_token)
         await self.store(account, refreshed)
         return refreshed.access_token
 
     async def store(self, account: SourceAccount, tokens: GoogleTokens) -> None:
         payload = {
             "access_token": tokens.access_token,
-            "refresh_token": tokens.refresh_token,
+            # Google omits the refresh token on re-consent; keep the one we have.
+            "refresh_token": tokens.refresh_token
+            or (account.credentials or {}).get("refresh_token"),
             "expires_at": tokens.expires_at.isoformat(),
         }
         account.scopes = tokens.scopes
         account.status = "active"
-        account._tokens = payload
+        account.credentials = payload
         await self.session.flush()
 
-    async def find(self, user_id: uuid.UUID, provider: str) -> SourceAccount | None:
-        return await self.session.scalar(
-            select(SourceAccount).where(
-                SourceAccount.user_id == user_id,
-                SourceAccount.provider == provider,
-                SourceAccount.revoked_at.is_(None),
-            )
+    async def find(
+        self, user_id: uuid.UUID, provider: str, *, external_id: str | None = None
+    ) -> SourceAccount | None:
+        """The connected account — a specific one by its address, or the first active.
+
+        A user can connect several Google accounts; each is its own row keyed by the
+        Gmail address, so a second consent never overwrites the first one's tokens.
+        """
+        query = select(SourceAccount).where(
+            SourceAccount.user_id == user_id,
+            SourceAccount.provider == provider,
+            SourceAccount.revoked_at.is_(None),
+        )
+        if external_id:
+            query = query.where(SourceAccount.external_id == external_id.lower())
+        return await self.session.scalar(query.order_by(SourceAccount.created_at))
+
+    async def list(self, user_id: uuid.UUID, provider: str) -> list[SourceAccount]:
+        return list(
+            (
+                await self.session.scalars(
+                    select(SourceAccount)
+                    .where(
+                        SourceAccount.user_id == user_id,
+                        SourceAccount.provider == provider,
+                        SourceAccount.revoked_at.is_(None),
+                    )
+                    .order_by(SourceAccount.created_at)
+                )
+            ).all()
         )

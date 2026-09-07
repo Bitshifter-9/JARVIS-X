@@ -19,9 +19,7 @@ PASSWORD = "correct-horse-battery-staple"  # noqa: S105
 
 @pytest.fixture
 async def auth(client):
-    await client.post(
-        "/v1/auth/register", json={"email": "conn@example.com", "password": PASSWORD}
-    )
+    await client.post("/v1/auth/register", json={"email": "conn@example.com", "password": PASSWORD})
     tokens = (
         await client.post(
             "/v1/auth/login", json={"email": "conn@example.com", "password": PASSWORD}
@@ -43,9 +41,7 @@ async def test_authorize_returns_a_google_url_with_read_scopes_only(client, auth
 
 async def test_write_scopes_are_opt_in(client, auth):
     body = (
-        await client.get(
-            "/v1/connectors/google/authorize?include_write=true", headers=auth
-        )
+        await client.get("/v1/connectors/google/authorize?include_write=true", headers=auth)
     ).json()
     assert "gmail.compose" in body["authorization_url"]
 
@@ -76,9 +72,7 @@ async def test_a_cancelled_authorization_is_explained_not_crashed(client, auth):
     body = (await client.get("/v1/connectors/google/authorize", headers=auth)).json()
     state = body["authorization_url"].split("state=")[1].split("&")[0]
 
-    response = await client.get(
-        f"/v1/connectors/google/callback?state={state}&error=access_denied"
-    )
+    response = await client.get(f"/v1/connectors/google/callback?state={state}&error=access_denied")
     assert response.status_code == 400
     assert "access_denied" in response.text
 
@@ -88,7 +82,9 @@ async def test_listing_shows_scopes_and_how_much_is_stored(client, auth, session
 
     user = await session.scalar(select(User).where(User.email == "conn@example.com"))
     account = SourceAccount(
-        user_id=user.id, provider="gmail", external_id="me@gmail.test",
+        user_id=user.id,
+        provider="gmail",
+        external_id="me@gmail.test",
         display_name="me@gmail.test",
         scopes=["https://www.googleapis.com/auth/gmail.readonly"],
         credentials={"access_token": "secret", "refresh_token": "also-secret"},
@@ -97,8 +93,12 @@ async def test_listing_shows_scopes_and_how_much_is_stored(client, auth, session
     await session.flush()
     session.add(
         SourceObject(
-            user_id=user.id, account_id=account.id, provider="gmail",
-            object_id="msg-1", kind="email", title="Assignment 3",
+            user_id=user.id,
+            account_id=account.id,
+            provider="gmail",
+            object_id="msg-1",
+            kind="email",
+            title="Assignment 3",
         )
     )
     await session.commit()
@@ -118,7 +118,9 @@ async def test_disconnecting_deletes_what_was_stored(client, auth, session):
 
     user = await session.scalar(select(User).where(User.email == "conn@example.com"))
     account = SourceAccount(
-        user_id=user.id, provider="gmail", external_id="me@gmail.test",
+        user_id=user.id,
+        provider="gmail",
+        external_id="me@gmail.test",
         credentials={"access_token": "secret", "refresh_token": "also-secret"},
     )
     session.add(account)
@@ -126,15 +128,16 @@ async def test_disconnecting_deletes_what_was_stored(client, auth, session):
     for i in range(3):
         session.add(
             SourceObject(
-                user_id=user.id, account_id=account.id, provider="gmail",
-                object_id=f"msg-{i}", kind="email",
+                user_id=user.id,
+                account_id=account.id,
+                provider="gmail",
+                object_id=f"msg-{i}",
+                kind="email",
             )
         )
     await session.commit()
 
-    result = (
-        await client.post(f"/v1/connectors/{account.id}/disconnect", headers=auth)
-    ).json()
+    result = (await client.post(f"/v1/connectors/{account.id}/disconnect", headers=auth)).json()
     assert result["objects_deleted"] == 3
     assert result["credentials_cleared"] is True
 
@@ -155,16 +158,17 @@ async def test_data_can_be_kept_on_request(client, auth, session):
     await session.flush()
     session.add(
         SourceObject(
-            user_id=user.id, account_id=account.id, provider="gmail",
-            object_id="keep-me", kind="email",
+            user_id=user.id,
+            account_id=account.id,
+            provider="gmail",
+            object_id="keep-me",
+            kind="email",
         )
     )
     await session.commit()
 
     result = (
-        await client.post(
-            f"/v1/connectors/{account.id}/disconnect?delete_data=false", headers=auth
-        )
+        await client.post(f"/v1/connectors/{account.id}/disconnect?delete_data=false", headers=auth)
     ).json()
     assert result["objects_deleted"] == 0
     assert await session.scalar(select(func.count()).select_from(SourceObject)) == 1
@@ -178,3 +182,84 @@ async def test_you_cannot_disconnect_another_account(client, auth, session):
 
     response = await client.post(f"/v1/connectors/{account.id}/disconnect", headers=auth)
     assert response.status_code == 404
+
+
+# ── several Google accounts, one JARVIS account ────────────────────────
+@pytest.fixture
+def google(monkeypatch):
+    """Google answers the code exchange with whichever address the test chose."""
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.api.routes import connectors as connectors_routes
+    from jarvis.connectors.google.oauth import GoogleTokens
+
+    box = {"email": "one@gmail.com"}
+
+    async def fake_exchange(code):  # noqa: ANN001, ANN202
+        return GoogleTokens(
+            access_token=f"at-{box['email']}",
+            refresh_token=f"rt-{box['email']}",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+            email=box["email"],
+        )
+
+    monkeypatch.setattr(connectors_routes, "exchange_code", fake_exchange)
+    return box
+
+
+async def _connect(client, auth, google, email: str):
+    from jarvis.api.routes import connectors as connectors_routes
+
+    google["email"] = email
+    me = (await client.get("/v1/auth/me", headers=auth)).json()
+    state = connectors_routes._sign_state(uuid.UUID(me["id"]))
+    response = await client.get(f"/v1/connectors/google/callback?state={state}&code=x")
+    assert response.status_code == 200, response.text
+    return me["id"]
+
+
+async def test_each_google_address_is_its_own_connected_account(client, auth, google, session):
+    from jarvis.connectors.google.oauth import TokenStore
+
+    user_id = uuid.UUID(await _connect(client, auth, google, "one@gmail.com"))
+    await _connect(client, auth, google, "two@gmail.com")
+    # Re-consenting the first refreshes it rather than adding a third row.
+    await _connect(client, auth, google, "One@Gmail.com")
+
+    store = TokenStore(session)
+    accounts = await store.list(user_id, "gmail")
+    assert sorted(a.external_id for a in accounts) == ["one@gmail.com", "two@gmail.com"]
+    assert (await store.find(user_id, "gmail", external_id="two@gmail.com")).credentials[
+        "refresh_token"
+    ] == "rt-two@gmail.com"
+    assert (await store.find(user_id, "gmail")).external_id == "one@gmail.com", "first is default"
+
+    listed = (await client.get("/v1/connectors", headers=auth)).json()
+    assert (
+        sorted(a["display_name"] for a in listed) == ["One@Gmail.com", "two@gmail.com"]
+        or len(listed) == 2
+    )
+
+
+async def test_sending_names_the_mailbox_and_refuses_an_unconnected_one(
+    client, auth, google, session
+):
+    from jarvis.db.models.identity import User
+    from jarvis.services.agent.executor import ToolExecutor
+    from jarvis.services.tool_gateway import ToolGateway
+    from sqlalchemy import select
+
+    user_id = uuid.UUID(await _connect(client, auth, google, "one@gmail.com"))
+    user = await session.scalar(select(User).where(User.id == user_id))
+    gateway = ToolGateway(session)
+    proposal = await gateway.propose(
+        user.id,
+        tool="gmail.send",
+        args={"to": "x@y.test", "subject": "s", "body": "b", "from_account": "nope@gmail.com"},
+    )
+    await gateway.decide(user.id, proposal.approval.id, approved=True, decided_by="test")
+    await session.commit()
+    action = await gateway.authorize_dispatch(proposal.action.id)
+    observed = await ToolExecutor(session).run(action)
+    assert "not connected" in observed["error"] and "nope@gmail.com" in observed["error"]

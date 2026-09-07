@@ -87,15 +87,26 @@ class GmailConnector:
             has_more=bool(history.get("nextPageToken")),
         )
 
+    async def list_sent(self, account_id: uuid.UUID, *, limit: int = 20) -> list[SyncItem]:
+        """The user's own recent sent mail — the raw material for learning how they
+        write. Read only on explicit request from the Train screen, never on a poll."""
+        listing = await self._get(
+            account_id, "/users/me/messages", labelIds="SENT", maxResults=min(limit, 50)
+        )
+        items: list[SyncItem] = []
+        for entry in listing.get("messages", []) or []:
+            item = await self.fetch(account_id, entry["id"])
+            if item is not None and (item.body or "").strip():
+                items.append(item)
+        return items
+
     async def fetch(self, account_id: uuid.UUID, object_id: str) -> SyncItem | None:
         message = await self._get(account_id, f"/users/me/messages/{object_id}", format="full")
         if not message:
             return None
         return normalize(message)
 
-    async def execute(
-        self, account_id: uuid.UUID, action: str, args: dict
-    ) -> ProviderEvidence:
+    async def execute(self, account_id: uuid.UUID, action: str, args: dict) -> ProviderEvidence:
         token = await self.tokens.access_token(account_id)
         if action == "gmail.create_draft":
             raw = _mime(args["to"], args.get("subject", ""), args["body"])
@@ -181,9 +192,7 @@ def normalize(message: dict) -> SyncItem:
     plain, html = _walk_parts(payload)
 
     received_ms = message.get("internalDate")
-    occurred_at = (
-        datetime.fromtimestamp(int(received_ms) / 1000, tz=UTC) if received_ms else None
-    )
+    occurred_at = datetime.fromtimestamp(int(received_ms) / 1000, tz=UTC) if received_ms else None
 
     return SyncItem(
         provider="gmail",

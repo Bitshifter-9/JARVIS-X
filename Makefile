@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml
 
-.PHONY: help bootstrap up down db-shell migrate revision api test test-live seed demo-reset connect-google connectors mobile \
+.PHONY: help bootstrap up down db-shell migrate revision api worker scheduler video-worker stack tunnel aws-launch deploy prod-up prod-logs prod-down test test-live seed demo-reset connect-google connectors mobile \
         mobile-test openapi lint fmt clean
 
 help: ## Show this help
@@ -37,6 +37,36 @@ revision: ## Autogenerate a migration: make revision m="add goals"
 
 api: ## Run the API with reload
 	JARVIS_BUILD_SHA=$$(git rev-parse --short HEAD) uv run uvicorn jarvis.main:app --reload
+
+worker: ## Run the background worker: agent loop, connector polling, escalation, heartbeat
+	uv run python -m jarvis.workers.main
+
+scheduler: ## Run the schedule ticker (fires deadline rungs into the queue)
+	uv run python -m jarvis.workers.scheduler
+
+video-worker: ## Run the YouTube video worker (renders drafts, uploads after approval)
+	uv run python -m jarvis.workers.video
+
+stack: ## Run api + worker + scheduler in one terminal (Ctrl-C stops all)
+	infra/scripts/stack.sh
+
+tunnel: ## Public HTTPS URL for this Mac via Cloudflare — no account, no card, no port-forward
+	infra/scripts/tunnel.sh
+
+aws-launch: ## Create the AWS VM (t4g.small — free through Dec 2026) after `aws configure`
+	infra/scripts/aws-launch.sh
+
+deploy: ## One-command deploy to a VM: make deploy HOST=ubuntu@1.2.3.4 KEY=~/.ssh/key DOMAIN=x.duckdns.org
+	infra/scripts/deploy.sh $(HOST) $(KEY) $(DOMAIN)
+
+prod-up: ## Build the image and start everything behind Caddy (needs .env with JARVIS_DOMAIN)
+	docker compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --build
+
+prod-logs: ## Tail production logs
+	docker compose --env-file .env -f infra/compose/docker-compose.prod.yml logs -f --tail=100
+
+prod-down: ## Stop production (keeps volumes)
+	docker compose --env-file .env -f infra/compose/docker-compose.prod.yml down
 
 test: ## Run the test suite
 	uv run pytest -q

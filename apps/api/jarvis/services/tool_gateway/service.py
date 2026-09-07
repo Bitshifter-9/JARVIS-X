@@ -83,6 +83,9 @@ class ToolGateway:
         simulate: bool = False,
         rationale: str | None = None,
         ttl: timedelta = DEFAULT_ACTION_TTL,
+        # A 10-minute approval window suits a chat action; a rendered video waiting on a
+        # human to watch it needs longer. Callers with slow approvals pass their own.
+        approval_ttl: timedelta = DEFAULT_APPROVAL_TTL,
     ) -> Proposal:
         """Evaluate a proposed action and persist it with whatever it now requires."""
         context = await self.policy.load_context(
@@ -132,7 +135,7 @@ class ToolGateway:
                     device_id=str(device_id) if device_id else None,
                     expires_at=expires_at,
                 ),
-                expires_at=datetime.now(UTC) + DEFAULT_APPROVAL_TTL,
+                expires_at=datetime.now(UTC) + approval_ttl,
                 requires_local_confirmation=decision.requires_local_confirmation,
             )
         else:
@@ -142,6 +145,19 @@ class ToolGateway:
         if approval is not None:
             self.session.add(approval)
         await self.session.flush()
+
+        if approval is not None:
+            # Tell the phone now; ring it later if nobody answers (PLAN.md 10.2.1).
+            from jarvis.db.queue import JOB_PRIORITY, JobQueue
+
+            await JobQueue(self.session).enqueue(
+                "approval.escalate",
+                {"approval_id": str(approval.id), "stage": "notify"},
+                user_id=user_id,
+                priority=JOB_PRIORITY["escalation"],
+                idempotency_key=f"approval-notify:{approval.id}",
+                max_attempts=2,
+            )
 
         await self._audit(
             user_id, "action.proposed", "action", str(action.id),
@@ -230,7 +246,37 @@ class ToolGateway:
             action.status = (
                 ActionStatus.APPROVED.value if approved else ActionStatus.REJECTED.value
             )
+        # A job polling for this decision may be minutes into exponential backoff;
+        # make it due now so "approved" takes effect immediately, not at the next retry.
+        from sqlalchemy import text as sql
+
+        await self.session.execute(
+            sql("""
+                UPDATE jobs SET visible_at = clock_timestamp()
+                WHERE status = 'pending' AND payload->>'action_id' = :action_id
+            """),
+            {"action_id": str(approval.action_id)},
+        )
         await self.session.flush()
+
+        # The suspended run (or a standalone action) continues in the worker, never
+        # inline: the decision may have come from a webhook that must answer in
+        # milliseconds, and the executor may need a browser.
+        from jarvis.db.queue import JOB_PRIORITY, JobQueue
+
+        await JobQueue(self.session).enqueue(
+            "run.resume",
+            {
+                "approval_id": str(approval.id),
+                "action_id": str(approval.action_id),
+                "run_id": str(action.run_id) if action and action.run_id else None,
+                "approved": approved,
+            },
+            user_id=user_id,
+            priority=JOB_PRIORITY["decision"],
+            idempotency_key=f"resume:{approval.id}",
+            max_attempts=3,
+        )
 
         await self._audit(
             user_id, "approval.decided", "approval", str(approval.id),

@@ -37,6 +37,29 @@ class TelegramClient:
         return data
 
 
+    async def send_file(
+        self, chat_id: str, path: str, *, caption: str = "", as_photo: bool = False
+    ) -> dict[str, Any]:
+        """Multipart upload of a local file — a screenshot or a document the Mac sent."""
+        if not self.bot_token:
+            raise RuntimeError("JARVIS_TELEGRAM_BOT_TOKEN is not configured")
+        method, field = ("sendPhoto", "photo") if as_photo else ("sendDocument", "document")
+        import asyncio
+        from pathlib import Path
+
+        payload = await asyncio.to_thread(Path(path).read_bytes)
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{API_BASE}/bot{self.bot_token}/{method}",
+                data={"chat_id": chat_id, "caption": caption[:1000]},
+                files={field: (Path(path).name, payload)},
+            )
+        data = response.json()
+        if not data.get("ok"):
+            log.warning("telegram_api_error", method=method, description=data.get("description"))
+        return data
+
+
 class RecordingTransport:
     """Captures calls instead of making them. Used by the tests."""
 
@@ -46,6 +69,13 @@ class RecordingTransport:
     async def call(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 100 + len(self.calls)}}
+
+    async def send_file(
+        self, chat_id: str, path: str, *, caption: str = "", as_photo: bool = False
+    ) -> dict[str, Any]:
+        self.calls.append(("sendPhoto" if as_photo else "sendDocument",
+                           {"chat_id": chat_id, "path": path, "caption": caption}))
+        return {"ok": True, "result": {"message_id": 500 + len(self.calls)}}
 
     def sent_texts(self) -> list[str]:
         return [p.get("text", "") for m, p in self.calls if m == "sendMessage"]

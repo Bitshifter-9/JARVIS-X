@@ -100,6 +100,7 @@ class GoalService:
         confidence: float | None = None,
         evidence_span: str | None = None,
         depends_on: list[uuid.UUID] | None = None,
+        recurrence: str | None = None,
     ) -> Task:
         if due_at is not None and due_at.tzinfo is None:
             raise ValueError("due_at must be timezone-aware; store a confirmed UTC instant")
@@ -118,6 +119,7 @@ class GoalService:
             source_id=source_id,
             confidence=confidence,
             evidence_span=evidence_span,
+            recurrence=recurrence,
         )
         self.session.add(task)
         await self.session.flush()
@@ -171,6 +173,11 @@ class GoalService:
                 task.remaining_minutes = 0
             setattr(task, field, value)
 
+        # A completed recurring deadline spawns its next occurrence (FEATURES-50 3).
+        spawned = None
+        if changes.get("status") == "done" and task.recurrence and task.due_at:
+            spawned = await self._spawn_next(task)
+
         # The version bump is what invalidates every pending schedule for this task.
         task.version += 1
         await self.session.flush()
@@ -179,7 +186,24 @@ class GoalService:
             await self.reschedule_task(task)
 
         log.info("task_updated", task_id=str(task.id), version=task.version)
+        if spawned is not None:
+            log.info("recurring_task_spawned", of=str(task.id), next=str(spawned.id))
         return task
+
+    async def _spawn_next(self, task: Task) -> Task | None:
+        step = _recurrence_step(task.recurrence, task.due_at)
+        if step is None:
+            return None
+        return await self.create_task(
+            task.user_id,
+            title=task.title,
+            goal_id=task.goal_id,
+            due_at=step,
+            timezone=task.timezone,
+            estimate_minutes=task.estimate_minutes,
+            priority=task.priority,
+            recurrence=task.recurrence,
+        )
 
     async def add_dependency(
         self, user_id: uuid.UUID, task_id: uuid.UUID, depends_on: uuid.UUID
@@ -429,3 +453,26 @@ class GoalService:
 
         await self.session.flush()
         return session_row
+
+
+def _recurrence_step(recurrence: str | None, due_at):  # noqa: ANN001, ANN201
+    """The next due instant for a recurrence, or None."""
+    from datetime import timedelta
+
+    if due_at is None:
+        return None
+    if recurrence == "daily":
+        return due_at + timedelta(days=1)
+    if recurrence == "weekly":
+        return due_at + timedelta(weeks=1)
+    if recurrence == "weekdays":
+        nxt = due_at + timedelta(days=1)
+        while nxt.weekday() >= 5:  # skip Sat/Sun
+            nxt += timedelta(days=1)
+        return nxt
+    if recurrence == "monthly":
+        month = due_at.month % 12 + 1
+        year = due_at.year + (1 if due_at.month == 12 else 0)
+        day = min(due_at.day, 28)  # avoid month-length surprises
+        return due_at.replace(year=year, month=month, day=day)
+    return None

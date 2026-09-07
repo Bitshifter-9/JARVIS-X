@@ -1,0 +1,115 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "jarvis x",
+      "intents": [
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] },
+        {
+          "name": "WhatIsDueIntent",
+          "slots": [],
+          "samples": [
+            "what is due today",
+            "what's due",
+            "what do I have today",
+            "what are my deadlines",
+            "what is due"
+          ]
+        },
+        {
+          "name": "MorningBriefIntent",
+          "slots": [],
+          "samples": [
+            "give me my brief",
+            "morning brief",
+            "brief me",
+            "what should I start with",
+            "how does today look"
+          ]
+        },
+        {
+          "name": "AddTaskIntent",
+          "slots": [
+            { "name": "taskTitle", "type": "AMAZON.SearchQuery" },
+            { "name": "dueDate", "type": "AMAZON.DATE" },
+            { "name": "dueTime", "type": "AMAZON.TIME" }
+          ],
+          "samples": [
+            "add a task {taskTitle}",
+            "add {taskTitle} due {dueDate}",
+            "add {taskTitle} due {dueDate} at {dueTime}",
+            "remind me to {taskTitle} on {dueDate}",
+            "new task {taskTitle}"
+          ]
+        },
+        {
+          "name": "RiskCheckIntent",
+          "slots": [{ "name": "goalName", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "am I going to finish {goalName}",
+            "is {goalName} at risk",
+            "how is {goalName} going",
+            "what is at risk",
+            "am I on track"
+          ]
+        },
+        {
+          "name": "AcknowledgeTaskIntent",
+          "slots": [{ "name": "taskTitle", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "acknowledge {taskTitle}",
+            "I know about {taskTitle}",
+            "stop reminding me about {taskTitle}",
+            "acknowledge that",
+            "got it"
+          ]
+        },
+        {
+          "name": "StartFocusIntent",
+          "slots": [{ "name": "taskTitle", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "start a focus session",
+            "start focus on {taskTitle}",
+            "let me focus on {taskTitle}",
+            "focus mode",
+            "start working on {taskTitle}"
+          ]
+        },
+        {
+          "name": "ApprovePendingIntent",
+          "slots": [],
+          "samples": [
+            "approve the pending action",
+            "approve it",
+            "approve the action",
+            "go ahead and approve",
+            "yes approve the pending action"
+          ]
+        }
+      ],
+      "types": []
+    },
+    "dialog": {
+      "delegationStrategy": "SKILL_RESPONSE",
+      "intents": [
+        {
+          "name": "ApprovePendingIntent",
+          "confirmationRequired": true,
+          "prompts": { "confirmation": "Confirm.Intent.ApprovePending" },
+          "slots": []
+        }
+      ]
+    },
+    "prompts": [
+      {
+        "id": "Confirm.Intent.ApprovePending",
+        "variations": [
+          { "type": "PlainText", "value": "Should I approve the pending action?" }
+        ]
+      }
+    ]
+  }
+}

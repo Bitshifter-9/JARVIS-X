@@ -20,11 +20,24 @@ import uuid
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 
+_last_ms = 0
+_seq = 0
+
+
 def uuid7() -> uuid.UUID:
-    """A UUIDv7: 48-bit millisecond timestamp, then randomness (RFC 9562)."""
+    """A UUIDv7: 48-bit millisecond timestamp, then randomness (RFC 9562).
+
+    Within one millisecond a 12-bit counter fills ``rand_a`` (the RFC's method 1), so
+    two ids minted in the same instant by this process still sort in the order they
+    were made — ``ORDER BY id`` on chat messages and actions stays truthful.
+    """
+    global _last_ms, _seq
     ms = int(time.time() * 1000) & 0xFFFF_FFFF_FFFF
-    rand = os.urandom(10)
-    b = bytearray(ms.to_bytes(6, "big") + rand)
+    if ms == _last_ms:
+        _seq = (_seq + 1) & 0x0FFF
+    else:
+        _last_ms, _seq = ms, int.from_bytes(os.urandom(2), "big") & 0x07FF
+    b = bytearray(ms.to_bytes(6, "big") + _seq.to_bytes(2, "big") + os.urandom(8))
     b[6] = (b[6] & 0x0F) | 0x70  # version 7
     b[8] = (b[8] & 0x3F) | 0x80  # RFC 4122 variant
     return uuid.UUID(bytes=bytes(b))

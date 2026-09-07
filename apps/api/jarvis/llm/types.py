@@ -26,6 +26,9 @@ class CallClass(enum.StrEnum):
 class Message:
     role: str  # system | user | assistant
     content: str
+    # (content_type, bytes) — a screenshot or a photo the model should look at. Only
+    # vision-capable providers receive them; the router prefers one when they are set.
+    images: list[tuple[str, bytes]] = field(default_factory=list)
 
 
 @dataclass
