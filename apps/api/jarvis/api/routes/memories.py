@@ -46,6 +46,19 @@ async def list_memories(
     ]
 
 
+@router.get("/resurface")
+async def resurface(
+    user: CurrentUser, session: SessionDep, limit: int = 2
+) -> list[dict[str, Any]]:
+    """Spaced-repetition (#21): important things you'd forget, brought back on a forgetting
+    curve. Advances the curve at most once per ~day, then returns what's currently surfaced."""
+    from jarvis.services.memory import MemoryService
+
+    feed = await MemoryService(session).resurface(user.id, limit=limit)
+    await session.commit()
+    return feed
+
+
 @router.delete("/{memory_id}")
 async def forget(memory_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     memory = await session.get(Memory, memory_id)

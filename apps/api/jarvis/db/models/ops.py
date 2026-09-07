@@ -143,6 +143,13 @@ class Memory(UUIDPrimaryKey, Timestamps, Base):
     provenance: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
 
+    # Spaced-repetition resurfacing (#21): when this was last brought back, and how many
+    # times — so its rest interval doubles each time, a forgetting curve.
+    last_surfaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    surface_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # A correction supersedes rather than overwrites, so the old belief stays auditable.
     invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

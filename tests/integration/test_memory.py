@@ -134,3 +134,42 @@ async def test_reranking_prefers_a_strong_match_over_a_recent_weak_one(session, 
 
     found = await memory.retrieve(user.id, "hackathon submission deadline September")
     assert "hackathon submission" in found[0].content
+
+
+async def test_resurface_brings_back_important_memories_on_a_curve(session, user, memory):
+    from datetime import UTC, datetime, timedelta
+
+    # An important, durable memory learned 10 days ago — due to resurface.
+    await memory.remember(
+        user.id,
+        content="Decided the API uses cursor pagination, not offsets",
+        kind="semantic",
+        importance=0.8,
+        provenance={"source": "chat"},
+    )
+    # A low-importance one and an episodic one should never resurface.
+    await memory.remember(user.id, content="mentioned the weather", kind="semantic",
+                          importance=0.4)
+    await memory.remember(user.id, content="episodic noise", kind="episodic", importance=0.9)
+    await session.commit()
+    # Age them so the interval has elapsed.
+    await session.execute(
+        Memory.__table__.update().where(Memory.user_id == user.id).values(
+            created_at=datetime.now(UTC) - timedelta(days=10))
+    )
+    await session.flush()
+
+    feed = await memory.resurface(user.id)
+    contents = [m["content"] for m in feed]
+    assert any("cursor pagination" in c for c in contents)
+    assert not any("weather" in c for c in contents)
+    assert not any("episodic" in c for c in contents)
+
+    row = (await session.scalars(
+        select(Memory).where(Memory.content.like("%cursor pagination%")))).one()
+    assert row.surface_count == 1 and row.last_surfaced_at is not None
+
+    # Called again right away: the gap hasn't elapsed, so the curve doesn't advance.
+    await memory.resurface(user.id)
+    await session.refresh(row)
+    assert row.surface_count == 1

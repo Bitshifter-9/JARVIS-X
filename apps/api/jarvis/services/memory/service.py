@@ -216,6 +216,79 @@ class MemoryService:
         await self.session.flush()
         return result.rowcount or 0
 
+    async def resurface(
+        self,
+        user_id: uuid.UUID,
+        *,
+        base_days: int = 3,
+        limit: int = 2,
+        gap_hours: int = 20,
+        show_days: int = 4,
+        now: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Spaced-repetition resurfacing (#21): bring the important things you'd forget back
+        on a forgetting curve. Durable memories (semantic|source) of high importance rest for
+        an interval that *doubles* each time one is resurfaced; when a memory's rest has
+        elapsed it's eligible. To stay gentle, a new batch is picked at most once per
+        ``gap_hours`` (so opening the app repeatedly doesn't churn the curve). Returns the
+        recently-surfaced set for the "worth remembering" card.
+
+        Advancing on read is safe because the gap makes it idempotent within the window; the
+        card feed is whatever was surfaced in the last ``show_days`` days.
+        """
+        from datetime import timedelta
+
+        moment = now or datetime.now(UTC)
+        candidates = (
+            await self.session.scalars(
+                select(Memory).where(
+                    Memory.user_id == user_id,
+                    Memory.invalidated_at.is_(None),
+                    Memory.kind.in_(("semantic", "source")),
+                    Memory.importance >= 0.6,
+                )
+            )
+        ).all()
+
+        last_surface = max(
+            (m.last_surfaced_at for m in candidates if m.last_surfaced_at), default=None
+        )
+        if last_surface is None or moment - last_surface >= timedelta(hours=gap_hours):
+            due: list[tuple[float, Memory]] = []
+            for m in candidates:
+                if _looks_like_a_secret(m.content):
+                    continue
+                # ponytail: interval doubles per surfacing; count stays small in practice.
+                interval = timedelta(days=base_days * (2**m.surface_count))
+                anchor = m.last_surfaced_at or m.created_at
+                overdue = (moment - anchor) - interval
+                if overdue.total_seconds() >= 0:
+                    due.append((overdue.total_seconds(), m))
+            # Most important first, then most overdue.
+            due.sort(key=lambda t: (t[1].importance, t[0]), reverse=True)
+            for _, m in due[:limit]:
+                m.last_surfaced_at = moment
+                m.surface_count += 1
+            await self.session.flush()
+
+        window = moment - timedelta(days=show_days)
+        shown = [
+            m for m in candidates
+            if m.last_surfaced_at is not None and m.last_surfaced_at >= window
+        ]
+        shown.sort(key=lambda m: m.last_surfaced_at, reverse=True)
+        return [
+            {
+                "id": str(m.id),
+                "kind": m.kind,
+                "content": m.content,
+                "importance": m.importance,
+                "source": (m.provenance or {}).get("source"),
+                "surfaced_at": m.last_surfaced_at.isoformat() if m.last_surfaced_at else None,
+            }
+            for m in shown
+        ]
+
     async def context_for(self, user_id: uuid.UUID, query: str, *, limit: int = 5) -> str:
         """Retrieved memory as prompt text, with citations and no credentials."""
         found = await self.retrieve(user_id, query, limit=limit)

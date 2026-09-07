@@ -42,6 +42,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#28 Dropped-thread finder** — an "Owe a reply?" card: people who asked you something a few
   hours ago that you may not have answered (from the triage `needs_reply` reads), muted senders
   excluded so it composes with the dislike learning above.
+- ✅ **#21 Spaced-repetition resurfacing** — a "Worth remembering" card brings important memories
+  back on a doubling forgetting curve, so what you learned once doesn't evaporate ("what I forget
+  that are important"). Curve advances server-side, paced to at most once a day.
 
 Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
 deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
@@ -101,8 +104,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 
 ## C. Recall & anti-forgetting — the second-brain core
 
-21. ⬜ **Spaced-repetition resurfacing.** Important notes/decisions resurface on a forgetting
-    curve, so what you learned once doesn't evaporate.
+21. ✅ **Spaced-repetition resurfacing.** Important notes/decisions resurface on a forgetting
+    curve, so what you learned once doesn't evaporate. Durable memories (semantic/source) of
+    high importance rest for an interval that *doubles* each time they're brought back; a
+    "Worth remembering" card on Insights shows the current set, paced to at most once a day.
 22. ✅ **Commitment tracking.** "I'll send it Friday," "let's do coffee next week" — extracted
     from your messages and tracked to done, so you keep your word.
 23. ⬜ **Instant contextual recall.** "What did I decide about the API?" → answered from
