@@ -17,6 +17,7 @@ import '../state/providers.dart';
 import '../theme.dart';
 import '../widgets/ambient.dart';
 import '../widgets/orb.dart';
+import 'life_search.dart';
 import 'voice_mode.dart';
 import '../live/live_activity.dart';
 import '../voice/voice_prefs.dart';
@@ -377,6 +378,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ]),
             ),
           ),
+        ),
+        IconButton(
+          tooltip: 'Search everything',
+          icon: const Icon(Icons.search),
+          onPressed: () => LifeSearch.open(context),
         ),
         IconButton(
           tooltip: 'Voice conversation',

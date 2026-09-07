@@ -569,6 +569,12 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> anomalies() async =>
       (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// Life search: one box over everything captured (second-brain #26).
+  Future<List<Map<String, dynamic>>> lifeSearch(String q) async {
+    final data = await _send('GET', '/v1/search', query: {'q': q}) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+  }
+
   // ── clipboard synced across devices (FEATURES-50 #26) ─────────────
   Future<Map<String, dynamic>> getClipboard() async =>
       await _send('GET', '/v1/clipboard') as Map<String, dynamic>;

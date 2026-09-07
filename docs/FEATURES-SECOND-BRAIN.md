@@ -87,7 +87,7 @@ LLM router cascade with a local Ollama fallback.
     before the meeting, the gift before the birthday, the promise before you see them.
 25. ⬜ **"What mattered" digest.** Auto daily/weekly rollup of the few things that mattered
     (extends the away-digest already shipped).
-26. ⬜ **One search box over your whole life.** Mail, chats, screens, notes, media — one
+26. ✅ **One search box over your whole life.** Mail, chats, screens, notes, media — one
     semantic search, ranked, with time and source.
 27. ⬜ **Rediscover.** Surfaces an old idea/note relevant to what you're doing *right now* —
     serendipity on purpose.
