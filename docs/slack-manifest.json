@@ -14,6 +14,7 @@
     "scopes": {
       "bot": [
         "chat:write",
+        "channels:join",
         "channels:history",
         "groups:history",
         "im:history",

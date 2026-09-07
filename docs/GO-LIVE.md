@@ -204,7 +204,18 @@ Steps 1–4 are done (app created from `docs/slack-manifest.json`, token + secre
    for **Verified ✓**.
 6. Same page → **Subscribe to bot events** → *Add Bot User Event* ×3: `message.channels`,
    `message.groups`, `message.im` → **Save Changes** → Slack asks you to **reinstall** → do.
-7. In Slack: `/invite @JARVIS X` in the channels that matter.
+7. Add the bot to the channels that matter. `/invite @JARVIS X` works on desktop; on
+   **mobile it often says "you don't have permission"** — that is a Slack workspace
+   restriction, not JARVIS. Two reliable ways instead:
+   - **Channel → name at the top → Integrations → Add apps → JARVIS X.** This adds the
+     app without needing invite permission.
+   - Or from any device, in the channel type: `@JARVIS X` then Enter — Slack offers
+     "Add to channel".
+   If none appear, the app was probably **not reinstalled** after step 6 (Slack shows a
+   yellow "reinstall your app" banner — click it and Authorize), or your workspace
+   requires an **admin to approve apps** (ask the workspace owner, or use a workspace you
+   admin). With the `channels:join` scope in the manifest, JARVIS can also add itself to a
+   **public** channel once installed.
 8. Link your Slack user: profile → ⋯ → *Copy member ID* (`U0…`), then with the `$TOKEN`
    from §3:
    ```bash
