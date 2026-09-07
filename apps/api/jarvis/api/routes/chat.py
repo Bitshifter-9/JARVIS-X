@@ -311,23 +311,30 @@ async def _finish(
             else "The web search returned no results — say you could not fetch "
             "current information, and answer only what you know for certain."
         )
-        response = await llm.chat(
-            messages
-            + [
-                Message("assistant", text),
-                Message(
-                    "user",
-                    grounding + "\n\nNow answer my previous question from these results, in "
-                    "your own style. Mention dates when the results give them. Do not "
-                    "output any ACTION line.",
-                ),
-            ],
-            user_id=user.id,
-            max_tokens=1500,
-            prefer=_prefer(body),
-        )
-        text = _SEARCH.sub("", response.text.strip()).strip()
-        provider = response.provider
+        try:
+            response = await llm.chat(
+                messages
+                + [
+                    Message("assistant", text),
+                    Message(
+                        "user",
+                        grounding + "\n\nNow answer my previous question from these "
+                        "results, in your own style. Mention dates when the results give "
+                        "them. Do not output any ACTION line.",
+                    ),
+                ],
+                user_id=user.id,
+                max_tokens=1500,
+                prefer=_prefer(body),
+            )
+            text = _SEARCH.sub("", response.text.strip()).strip()
+            provider = response.provider
+        except Exception as exc:  # noqa: BLE001 — degrade, never lose the turn
+            log.warning("chat_search_failed", error=str(exc)[:200])
+            text = (
+                "I could not reach a model to summarise live results just now — the free "
+                "quota looks spent. Try again shortly."
+            )
 
     # ── the agent: anything with an effect, or anything about the user's own rows ──
     if match := _AGENT.search(text):
@@ -335,14 +342,22 @@ async def _finish(
             request = str(json.loads(match.group(1)).get("request", "")).strip() or latest
         except json.JSONDecodeError:
             request = latest
-        handle = await _run_agent(session, user.id, request, llm)
-        text = describe(handle)
-        action = {
-            "kind": "agent.run",
-            "run_id": str(handle.run_id),
-            "status": handle.status,
-            "approval_id": (handle.interrupt or {}).get("approval_id"),
-        }
+        try:
+            handle = await _run_agent(session, user.id, request, llm)
+            text = describe(handle)
+            action = {
+                "kind": "agent.run",
+                "run_id": str(handle.run_id),
+                "status": handle.status,
+                "approval_id": (handle.interrupt or {}).get("approval_id"),
+            }
+        except Exception as exc:  # noqa: BLE001 — a model outage must not lose the turn
+            log.warning("chat_agent_failed", error=str(exc)[:200])
+            text = (
+                "I could not reach a model to do that just now — the free quota looks "
+                "spent. Try again shortly, or add a working key in Settings."
+            )
+            action = None
 
     # ── video render action ────────────────────────────────────────────
     if match := _GENERATE.search(text):
@@ -360,7 +375,10 @@ async def _finish(
             )
             action = {"kind": "youtube.generate", "topic": topic, "job_id": str(job.id)}
 
-    await _remember(memory, llm, user.id, latest)
+    try:
+        await _remember(memory, llm, user.id, latest)
+    except Exception as exc:  # noqa: BLE001 — remembering is a bonus, not the turn
+        log.warning("chat_remember_failed", error=str(exc)[:200])
 
     text = text or "Done."
     meta = {"provider": provider, "searched": searched, "action": action}
@@ -386,7 +404,10 @@ async def _finish(
     )
     conversation.last_message_at = now
     if conversation.title == "New chat":
-        conversation.title = await _title_for(llm, user.id, latest, text)
+        try:
+            conversation.title = await _title_for(llm, user.id, latest, text)
+        except Exception as exc:  # noqa: BLE001 — a title is cosmetic
+            log.warning("chat_title_failed", error=str(exc)[:200])
     await session.flush()
 
     return {

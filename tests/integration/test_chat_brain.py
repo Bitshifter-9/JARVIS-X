@@ -288,3 +288,38 @@ async def test_a_run_shows_its_steps(client, auth, monkeypatch):
     assert run["status"] == "succeeded"
     assert [s["tool"] for s in run["steps"]] == ["tasks.list"]
     assert run["steps"][0]["verdict"] == "verified"
+
+
+async def test_a_model_outage_in_the_agent_hop_still_saves_the_turn(client, auth, monkeypatch):
+    """The persona says ACTION agent, but the agent's model call fails (free quota
+    spent). The chat must degrade and still store the turn, not error it out."""
+    from jarvis.llm.types import CallClass, LLMResponse
+
+    class HalfDead(ChatModel):
+        async def generate(self, request):  # noqa: ANN001
+            # The persona's own CHAT reply is the ACTION line; everything the agent
+            # then needs (classify/plan) fails, as a spent provider would.
+            if request.call_class is CallClass.CHAT:
+                return LLMResponse(
+                    text='ACTION agent {"request": "what mail did I get today"}',
+                    provider=self.name, model=self.model,
+                )
+            raise RuntimeError("all providers failed for classify — quota")
+
+    model = HalfDead(persona_reply="", plan=[])
+    _install(monkeypatch, model)
+
+    r = await client.post(
+        "/v1/chat",
+        json={"messages": [{"role": "user", "content": "what mail did I get today?"}]},
+        headers=auth,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "could not reach a model" in body["text"].lower()
+    # The turn is saved: history has the user line and the graceful reply.
+    history = await client.get(
+        "/v1/chat/history", params={"conversation_id": body["conversation_id"]}, headers=auth
+    )
+    roles = [m["role"] for m in history.json()]
+    assert roles == ["user", "assistant"]

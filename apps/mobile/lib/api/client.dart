@@ -10,6 +10,14 @@ import 'models.dart';
 ///
 /// Refresh is handled here rather than at call sites: an access token lives 15 minutes,
 /// and a screen that has to think about that will eventually forget.
+/// The session's tokens, held outside any one client instance. When `clientProvider`
+/// rebuilds (e.g. the base URL is set on launch), the new client seeds from here, so it
+/// never comes up unauthenticated and hits "Missing bearer token".
+class SessionTokens {
+  static String? access;
+  static String? refresh;
+}
+
 class JarvisClient {
   JarvisClient({
     required this.baseUrl,
@@ -28,20 +36,25 @@ class JarvisClient {
   /// Called whenever tokens change, so they can be persisted.
   final void Function(String access, String refresh)? onTokens;
 
-  String? _accessToken;
-  String? _refreshToken;
+  // Seeded from the process-wide holder so a rebuilt client keeps the session.
+  String? _accessToken = SessionTokens.access;
+  String? _refreshToken = SessionTokens.refresh;
 
   bool get isAuthenticated => _accessToken != null;
 
   void setTokens(String access, String refresh) {
     _accessToken = access;
     _refreshToken = refresh;
+    SessionTokens.access = access;
+    SessionTokens.refresh = refresh;
     onTokens?.call(access, refresh);
   }
 
   void clearTokens() {
     _accessToken = null;
     _refreshToken = null;
+    SessionTokens.access = null;
+    SessionTokens.refresh = null;
     cache.clear();
     _artifacts.clear();
   }

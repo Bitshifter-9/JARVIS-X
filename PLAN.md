@@ -661,6 +661,8 @@ info, find-my-devices map; digests, weekly review, GraphRAG answers.
 
 ---
 
+| 13.13 | **Two production bugs from the screenshots.** (a) Chat replied "I answered but could not save that turn" whenever the agent/search hop needed a model and both free keys were spent: `_finish` now catches each hop (agent, search, remember, title) and degrades to a plain "could not reach a model just now" while still **saving the turn**. (b) Settings showed "Missing bearer token" on Mac and phone: the client kept its token only in-memory, so a client rebuild (the base URL is set on launch) came up unauthenticated. Tokens now live in a process-wide `SessionTokens` holder the new client seeds from, so it is never anonymous | ✅ Test: an ACTION-agent reply whose agent model raises still returns 200 with a graceful message and a saved user+assistant turn; Dart tests green |
+
 ## 13. Risks
 
 | Risk | Impact | Mitigation |
