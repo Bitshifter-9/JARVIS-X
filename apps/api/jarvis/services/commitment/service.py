@@ -95,6 +95,32 @@ async def scan_commitments(session: AsyncSession, user_id: uuid.UUID, *, limit: 
     return caught
 
 
+async def claim_due_commitments(
+    session: AsyncSession, *, within_hours: int = 6
+) -> list[Commitment]:
+    """About-to-forget nudge (second-brain #24): open, dated commitments coming due within
+    the window that haven't been reminded yet — claimed (reminded_at set) so the caller can
+    push exactly once. Returns the ones to nudge."""
+    from datetime import timedelta
+
+    now = datetime.now(UTC)
+    horizon = now + timedelta(hours=within_hours)
+    rows = (
+        await session.scalars(
+            select(Commitment).where(
+                Commitment.status == "open",
+                Commitment.reminded_at.is_(None),
+                Commitment.due_at.is_not(None),
+                Commitment.due_at <= horizon,
+            )
+        )
+    ).all()
+    for c in rows:
+        c.reminded_at = now
+    await session.flush()
+    return list(rows)
+
+
 def commitment_out(c: Commitment) -> dict[str, Any]:
     return {
         "id": str(c.id),

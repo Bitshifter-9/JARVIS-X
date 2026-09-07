@@ -24,6 +24,22 @@ Built on what already exists: the event/source pipeline, the knowledge graph
 spending, streaks, anomalies), personas, the signed device nodes (Mac + phone), and the
 LLM router cascade with a local Ollama fallback.
 
+## Shipped so far
+
+Phase 1 (the affordable foundation) is done, and Phase 2 has begun — all on-budget:
+regex, a **local** embedder (server CPU, no API), and plain Postgres, no new cloud cost.
+
+- ✅ **#26 Life search** — one keyword box over mail, deadlines, chat and memory.
+- ✅ **#9 Voice quick-capture** — dictate a thought; dated → deadline, else a searchable memory.
+- ✅ **#22 Commitment tracking** — catch first-person promises ("I'll send it Friday") and track them.
+- ✅ **#24 About-to-forget** — a "Coming up" surface plus a proactive "you said you'd…" nudge.
+- ✅ **Memory optimisation** — mem0-style consolidation (dedupe near-identical) + a *forget* tier
+  (recall reinforces; unused episodic memories age out past a TTL). This is the storage-budget spine.
+
+Still open in the optimisation spine: binary-quantised vectors + full hot→warm→cold tiering —
+deferred until the data volume makes them worth the complexity (the roadmap's own cheap-first rule).
+
+
 ---
 
 ## A. Ambient capture — the raw material (on-device, opt-in, privacy-gated)
@@ -83,7 +99,7 @@ LLM router cascade with a local Ollama fallback.
     from your messages and tracked to done, so you keep your word.
 23. ⬜ **Instant contextual recall.** "What did I decide about the API?" → answered from
     everything captured, each claim with a source (GraphRAG over your life).
-24. ⬜ **About-to-forget reminders.** Surfaces the thing *just before* you need it — the name
+24. ✅ **About-to-forget reminders.** Surfaces the thing *just before* you need it — the name
     before the meeting, the gift before the birthday, the promise before you see them.
 25. ⬜ **"What mattered" digest.** Auto daily/weekly rollup of the few things that mattered
     (extends the away-digest already shipped).

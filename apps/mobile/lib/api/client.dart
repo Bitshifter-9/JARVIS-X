@@ -569,6 +569,10 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> anomalies() async =>
       (await _send('GET', '/v1/insights/anomalies') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// About-to-forget: deadlines & promises coming due soon (second-brain #24).
+  Future<List<Map<String, dynamic>>> upcoming() async =>
+      (await _send('GET', '/v1/proactivity/upcoming') as List<dynamic>).cast<Map<String, dynamic>>();
+
   // ── commitment tracking (second-brain #22) ────────────────────────
   Future<List<Map<String, dynamic>>> commitments() async =>
       (await _send('GET', '/v1/commitments') as List<dynamic>).cast<Map<String, dynamic>>();

@@ -174,3 +174,5 @@ class Commitment(UUIDPrimaryKey, Timestamps, Base):
     # open | done | dropped
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When an about-to-forget nudge was last sent, so it isn't sent twice (#24).
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

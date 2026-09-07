@@ -11,10 +11,51 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from jarvis.db.models.domain import Task, WorkSession
+from jarvis.db.models.domain import Commitment, Task, WorkSession
 from jarvis.db.models.source import SourceObject
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def coming_up(
+    session: AsyncSession, user_id: uuid.UUID, *, hours: int = 48
+) -> list[dict[str, Any]]:
+    """About-to-forget (second-brain #24): the deadlines and promises about to come due,
+    surfaced just before you need them, newest-need first."""
+    now = datetime.now(UTC)
+    horizon = now + timedelta(hours=hours)
+    out: list[dict[str, Any]] = []
+
+    tasks = (
+        await session.scalars(
+            select(Task).where(
+                Task.user_id == user_id,
+                Task.status.in_(("open", "in_progress")),
+                Task.due_at.is_not(None),
+                Task.due_at <= horizon,
+            )
+        )
+    ).all()
+    for t in tasks:
+        out.append({"type": "deadline", "text": t.title, "when": t.due_at.isoformat(),
+                    "id": str(t.id), "overdue": t.due_at < now})
+
+    commitments = (
+        await session.scalars(
+            select(Commitment).where(
+                Commitment.user_id == user_id,
+                Commitment.status == "open",
+                Commitment.due_at.is_not(None),
+                Commitment.due_at <= horizon,
+            )
+        )
+    ).all()
+    for c in commitments:
+        out.append({"type": "commitment", "text": c.text, "when": c.due_at.isoformat(),
+                    "id": str(c.id), "overdue": c.due_at < now})
+
+    out.sort(key=lambda r: r["when"])
+    return out
 
 
 def streak_of(days: set[date], *, today: date) -> dict[str, int]:

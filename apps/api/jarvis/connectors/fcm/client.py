@@ -31,6 +31,7 @@ _ROUTE_FOR_KIND = {
     "agent": "timeline",
     "mail": "insights",
     "digest": "home",
+    "commitment": "insights",
 }
 
 

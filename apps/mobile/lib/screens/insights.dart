@@ -23,6 +23,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _grouped = const [];
   List<Map<String, dynamic>> _anomalies = const [];
   List<Map<String, dynamic>> _commitments = const [];
+  List<Map<String, dynamic>> _upcoming = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -51,6 +52,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.groupedActivity(),
         client.anomalies(),
         client.commitments(),
+        client.upcoming(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -63,6 +65,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _grouped = results[6] as List<Map<String, dynamic>>;
         _anomalies = results[7] as List<Map<String, dynamic>>;
         _commitments = results[8] as List<Map<String, dynamic>>;
+        _upcoming = results[9] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -116,6 +119,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.all(12),
                     children: [
+                      if (_upcoming.isNotEmpty) _ComingUpCard(items: _upcoming),
+                      if (_upcoming.isNotEmpty) const SizedBox(height: 8),
                       if (_commitments.isNotEmpty)
                         _CommitmentsCard(
                           commitments: _commitments,
@@ -497,5 +502,55 @@ class _CommitmentsCard extends StatelessWidget {
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ][d.month - 1]} ${d.day}';
+  }
+}
+
+/// About-to-forget: what's coming due, surfaced just before you need it (second-brain #24).
+class _ComingUpCard extends StatelessWidget {
+  const _ComingUpCard({required this.items});
+  final List<Map<String, dynamic>> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.upcoming_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Coming up', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 4),
+          for (final it in items)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                it['type'] == 'commitment' ? Icons.handshake_outlined : Icons.event_outlined,
+                size: 20,
+                color: it['overdue'] == true ? scheme.error : scheme.onSecondaryContainer,
+              ),
+              title: Text(it['text'] as String? ?? '',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: Text(_when(it['when'] as String?, it['overdue'] == true),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: it['overdue'] == true ? scheme.error : null)),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  static String _when(String? iso, bool overdue) {
+    final d = iso != null ? DateTime.tryParse(iso)?.toLocal() : null;
+    if (d == null) return '';
+    if (overdue) return 'overdue';
+    final left = d.difference(DateTime.now());
+    if (left.inHours < 1) return '${left.inMinutes}m';
+    if (left.inHours < 24) return '${left.inHours}h';
+    return '${left.inDays}d';
   }
 }

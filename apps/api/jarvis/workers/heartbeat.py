@@ -76,6 +76,21 @@ async def beat(
     forgotten = await MemoryService(session).prune()
     if forgotten:
         log.info("memory_pruned", count=forgotten)
+
+    # About-to-forget: nudge for a promise about to come due, once (second-brain #24).
+    from jarvis.services.commitment.service import claim_due_commitments
+
+    for c in await claim_due_commitments(session):
+        try:
+            await NotificationService(session, senders=senders).notify(
+                c.user_id,
+                title="You said you'd…",
+                body=c.text,
+                data={"kind": "commitment", "id": str(c.id)},
+            )
+        except Exception as exc:  # noqa: BLE001 — a missed nudge is not fatal
+            log.warning("commitment_nudge_failed", error=str(exc)[:120])
+
     alerted: list[str] = []
     nudged: list[str] = []
     learned: list[str] = []

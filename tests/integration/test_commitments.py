@@ -80,3 +80,45 @@ async def test_the_endpoints(client, session):
     done = (await client.post(f"/v1/commitments/{cid}/done", headers=auth)).json()
     assert done["status"] == "done"
     assert (await client.get("/v1/commitments", headers=auth)).json() == []  # no open ones left
+
+
+async def test_coming_up_surfaces_deadlines_and_commitments(session, user):
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.services.goal import GoalService
+    from jarvis.services.proactivity import coming_up
+
+    now = datetime.now(UTC)
+    await GoalService(session).create_task(
+        user.id, title="Submit form", due_at=now + timedelta(hours=12), timezone="UTC"
+    )
+    session.add(Commitment(user_id=user.id, text="I'll call Sam", due_at=now + timedelta(hours=24),
+                           source="chat", dedupe_key="k-sam"))
+    session.add(Commitment(user_id=user.id, text="someday thing", due_at=now + timedelta(days=30),
+                           source="chat", dedupe_key="k-far"))
+    await session.flush()
+
+    up = await coming_up(session, user.id, hours=48)
+    kinds = [x["type"] for x in up]
+    assert "deadline" in kinds and "commitment" in kinds
+    assert all(not x["overdue"] for x in up)
+    assert up[0]["when"] <= up[-1]["when"]  # sorted by when
+    assert not any(x["text"] == "someday thing" for x in up)  # beyond the horizon
+
+
+async def test_claim_due_commitments_fires_once(session, user):
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.services.commitment.service import claim_due_commitments
+
+    now = datetime.now(UTC)
+    session.add(Commitment(
+        user_id=user.id, text="I'll pay the bill", due_at=now + timedelta(hours=2),
+        source="chat", dedupe_key="k-bill",
+    ))
+    await session.flush()
+
+    first = await claim_due_commitments(session, within_hours=6)
+    assert len(first) == 1 and first[0].reminded_at is not None
+    # Claimed — a second pass won't nudge again.
+    assert await claim_due_commitments(session, within_hours=6) == []
