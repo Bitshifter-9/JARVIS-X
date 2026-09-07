@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
 import '../state/providers.dart';
+import '../theme.dart';
 
 /// Mail intelligence in one place: what you spent, what's due, where you're going, and
 /// what changed while you were away — all derived on the server from your mail, no
@@ -31,6 +32,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _people = const [];
   Map<String, dynamic> _interests = const {};
   Map<String, dynamic> _rhythm = const {};
+  Map<String, dynamic> _mood = const {};
+  Map<String, dynamic> _speech = const {};
+  List<Map<String, dynamic>> _gaps = const [];
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -66,6 +70,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.relationships(),
         client.interests(),
         client.rhythm(),
+        client.mood(),
+        client.speechProfile(),
+        client.knowledgeGaps(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -85,6 +92,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _people = results[13] as List<Map<String, dynamic>>;
         _interests = results[14] as Map<String, dynamic>;
         _rhythm = results[15] as Map<String, dynamic>;
+        _mood = results[16] as Map<String, dynamic>;
+        _speech = results[17] as Map<String, dynamic>;
+        _gaps = results[18] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -116,6 +126,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   bool get _hasDrift =>
       (_interests['rising'] as List?)?.isNotEmpty == true ||
       (_interests['fading'] as List?)?.isNotEmpty == true;
+
+  bool get _hasAboutYou =>
+      _mood['enough_data'] == true ||
+      _speech['enough_data'] == true ||
+      _gaps.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -186,6 +201,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
                       if (_rhythm['enough_data'] == true) const SizedBox(height: 8),
                       if (_rhythm['enough_data'] == true) _RhythmCard(rhythm: _rhythm),
+                      if (_hasAboutYou) const SizedBox(height: 8),
+                      if (_hasAboutYou)
+                        _AboutYouCard(mood: _mood, speech: _speech, gaps: _gaps),
                     ],
                   ),
                 ),
@@ -909,4 +927,82 @@ class _RhythmCard extends StatelessWidget {
 
   static bool _inWindow(int h, int start, int end) =>
       start <= end ? (h >= start && h < end) : (h >= start || h < end);
+}
+
+
+/// "About you": a consolidated glance at what JARVIS has learned about how you tick — a
+/// private mood trend (#18), how you phrase things (#12), and topics you keep asking about
+/// (#29). One card, so it informs without crowding.
+class _AboutYouCard extends StatelessWidget {
+  const _AboutYouCard({required this.mood, required this.speech, required this.gaps});
+  final Map<String, dynamic> mood;
+  final Map<String, dynamic> speech;
+  final List<Map<String, dynamic>> gaps;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final moodOk = mood['enough_data'] == true;
+    final speechOk = speech['enough_data'] == true;
+    final fillers = (speech['fillers'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final moodWord = mood['mood'] as String?;
+    final moodColor = {
+      'up': JarvisColors.success,
+      'down': JarvisColors.warning,
+      'steady': scheme.onSurface,
+    }[moodWord];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.self_improvement_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('About you', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text('What JARVIS is learning about how you tick — private to you.',
+              style: Theme.of(context).textTheme.bodySmall),
+          if (moodOk) ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              Icon(Icons.mood, size: 16, color: moodColor),
+              const SizedBox(width: 8),
+              Text('Mood lately: ',
+                  style: Theme.of(context).textTheme.bodyMedium),
+              Text('$moodWord',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600, color: moodColor)),
+            ]),
+          ],
+          if (speechOk) ...[
+            const SizedBox(height: 10),
+            Text('You write ~${speech['avg_sentence_words']} words a sentence'
+                '${fillers.isEmpty ? '' : '. You lean on:'}',
+                style: Theme.of(context).textTheme.bodyMedium),
+            if (fillers.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final f in fillers.take(5))
+                  Chip(visualDensity: VisualDensity.compact, label: Text('"${f['term']}"')),
+              ]),
+            ],
+          ],
+          if (gaps.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('You keep asking about:', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final g in gaps.take(6))
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.school_outlined, size: 14),
+                  label: Text('${g['topic']}'),
+                ),
+            ]),
+          ],
+        ]),
+      ),
+    );
+  }
 }

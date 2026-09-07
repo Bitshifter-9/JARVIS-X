@@ -163,6 +163,25 @@ async def get_phrasebook(user: CurrentUser, session: SessionDep) -> dict[str, An
     return {"terms": await phrasebook(session, user.id)}
 
 
+@router.get("/profile/speech")
+async def speech(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """How you phrase things (#12): filler words, favourite phrases, sentence length — from
+    your own messages, no model. Feeds drafting-in-your-voice and the coach."""
+    from jarvis.services.speech import speech_profile
+
+    return await speech_profile(session, user.id)
+
+
+@router.get("/profile/knowledge-gaps")
+async def knowledge_gaps_route(
+    user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Topics you keep asking about (#29) — likely gaps worth a micro-lesson."""
+    from jarvis.services.knowledge_gaps import knowledge_gaps
+
+    return {"gaps": await knowledge_gaps(session, user.id)}
+
+
 @router.get("/profile/interview")
 async def interview_questions(user: CurrentUser) -> list[dict[str, str]]:  # noqa: ARG001
     return [{"key": k, "question": q} for k, q in INTERVIEW]

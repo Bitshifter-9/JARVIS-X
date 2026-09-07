@@ -91,6 +91,14 @@ async def audit_actions(user: CurrentUser, session: SessionDep) -> list[str]:
     return sorted(rows)
 
 
+@router.get("/mood")
+async def mood(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """A gentle private sentiment line from your own words (#18) — on your account only."""
+    from jarvis.services.mood import mood_trend
+
+    return await mood_trend(session, user.id)
+
+
 @router.get("/rhythm")
 async def rhythm(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     """Your energy curve by hour — when you focus and when you slump (#15), so nudges land

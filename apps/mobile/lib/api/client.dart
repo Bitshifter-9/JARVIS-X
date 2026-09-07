@@ -625,6 +625,21 @@ class JarvisClient {
   Future<Map<String, dynamic>> rhythm() async =>
       await _send('GET', '/v1/rhythm') as Map<String, dynamic>;
 
+  /// Private mood trend from your own words (#18) — {enough_data, points, latest, mood}.
+  Future<Map<String, dynamic>> mood() async =>
+      await _send('GET', '/v1/mood') as Map<String, dynamic>;
+
+  /// Speech-pattern profile: fillers, favourite phrases, sentence length (#12).
+  Future<Map<String, dynamic>> speechProfile() async =>
+      await _send('GET', '/v1/profile/speech') as Map<String, dynamic>;
+
+  /// Knowledge gaps: topics you keep asking about (#29).
+  Future<List<Map<String, dynamic>>> knowledgeGaps() async =>
+      ((await _send('GET', '/v1/profile/knowledge-gaps') as Map<String, dynamic>)['gaps']
+              as List<dynamic>? ??
+          const [])
+          .cast<Map<String, dynamic>>();
+
   /// Interest drift: topics rising/fading in your own words (second-brain #17).
   Future<Map<String, dynamic>> interests() async =>
       await _send('GET', '/v1/interests') as Map<String, dynamic>;

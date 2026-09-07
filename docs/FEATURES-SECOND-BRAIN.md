@@ -62,6 +62,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   urgent deadlines, promises due, replies owed and gone-quiet people into the few things to act on.
 - ✅ **#15 Rhythm model** — a "Your rhythm" card: your energy curve by hour (focus sessions +
   completed tasks), with the peak hour and best window, so nudges can land when you're receptive.
+- ✅ **#18 Mood trend / #12 Speech pattern / #29 Knowledge gaps** — an "About you" card: a
+  private weekly sentiment line, the filler words and phrases you lean on, and the topics you
+  keep asking about — all deterministic over your own words, no model, private to your account.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -104,8 +107,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     `POST /v1/profile/learn-style` reads your sent mail on request and writes a style card to
     `profile.learned_style`, which triage/drafting already read. (A cheap always-on stats
     fallback from chat, and auto-refresh, are the later upgrades.)
-12. ⬜ **Speech-pattern profile.** Pace, filler words, the phrases you lean on — used both to
-    draft in your voice and to coach (§D).
+12. ✅ **Speech-pattern profile.** The filler words you lean on, the phrases you repeat, your
+    typical sentence length — from your own messages, deterministic, no model. Feeds
+    drafting-in-your-voice and the coach. (Pace/prosody waits on ambient audio #2.)
 13. ✅ **Personal phrasebook.** Your recurring jargon, names, and acronyms → feeds the
     transcriber and drafter so it stops mishearing "Guru Vai" as "guruvhy." Deterministic
     proper-noun/acronym frequency over your own words (chat + the profile you wrote), no model;
@@ -126,8 +130,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     briefings track your actual attention, not a stale profile. Deterministic: the topics/names
     in your own recent messages vs a longer baseline → rising and fading. A "Where your head is"
     card on Insights. Richer signal arrives once reading/watching capture (#4) lands.
-18. ⬜ **Private mood/sentiment trend.** From journals and your own messages, on-device only —
-    a gentle line chart, never shared, feeds the coach.
+18. ✅ **Private mood/sentiment trend.** From your own messages, a deterministic lexicon score
+    by week — a gentle line, never shared, private to your account. Feeds the coach; surfaced in
+    the "About you" card.
 19. ⬜ **Digital twin persona.** A persona that answers *as you* (drafting, rehearsing a hard
     conversation, "what would I say?") — the seed of the future self-model.
 20. ⬜ **Personal LoRA (the actual learning).** Periodically fine-tune a small on-device
@@ -160,8 +165,8 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 28. ✅ **Dropped-thread finder.** People who asked you something a few hours ago you may not
     have answered — read off the triage ``needs_reply`` classifications, one row per sender,
     muted senders excluded. An "Owe a reply?" card on Insights.
-29. ⬜ **Knowledge-gap detector.** Topics you keep needing but never learned → offered as a
-    micro-lesson (feeds §D #35).
+29. ✅ **Knowledge-gap detector.** Topics you keep asking about — the recurring subjects of your
+    own questions — surfaced as likely gaps worth a micro-lesson (deterministic, no model).
 30. ⬜ **Time-travel reconstruction.** "What was I working on last Tuesday?" — a rebuilt day
     from the capture streams.
 
