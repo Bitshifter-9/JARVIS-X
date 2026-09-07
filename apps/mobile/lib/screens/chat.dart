@@ -497,67 +497,64 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             GestureDetector(
               onLongPress: () => _turnActions(context, i),
-              child: Align(
-                alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (!mine) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: JarvisOrb(
-                            state: t.streaming ? OrbState.thinking : OrbState.idle, size: 22),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width.clamp(0, 720) * 0.8),
-                      decoration: BoxDecoration(
-                        gradient: mine
-                            ? LinearGradient(colors: [
-                                scheme.primary,
-                                scheme.primary.withValues(alpha: 0.75),
-                              ])
-                            : null,
-                        color: mine ? null : context.surfaces.surface3,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(18),
-                          topRight: const Radius.circular(18),
-                          bottomLeft: Radius.circular(mine ? 18 : 6),
-                          bottomRight: Radius.circular(mine ? 6 : 18),
+              child: mine
+                  // You: a calm, subtle bubble, right-aligned (Claude-style).
+                  ? Align(
+                      alignment: Alignment.centerRight,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 10, bottom: 10, left: 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                        decoration: BoxDecoration(
+                          color: context.surfaces.surface3,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(20),
+                            topRight: Radius.circular(20),
+                            bottomLeft: Radius.circular(20),
+                            bottomRight: Radius.circular(6),
+                          ),
                         ),
+                        child: SelectableText(t.content,
+                            style: TextStyle(color: scheme.onSurface, height: 1.35)),
                       ),
-                      child: mine
-                          ? SelectableText(t.content,
-                              style: TextStyle(color: scheme.onPrimary, height: 1.35))
-                          : t.content.isEmpty && t.streaming
-                              ? const _ThinkingDots()
-                              : GptMarkdown(
-                                  t.content,
-                                  style: TextStyle(color: scheme.onSurface, height: 1.4),
-                                ),
+                    )
+                  // Jarvis: full-width text on the page, a small mark above it.
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 2),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(children: [
+                          JarvisOrb(
+                              state: t.streaming ? OrbState.thinking : OrbState.idle, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Jarvis',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurface.withValues(alpha: 0.45),
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.3,
+                                  )),
+                        ]),
+                        const SizedBox(height: 8),
+                        t.content.isEmpty && t.streaming
+                            ? const _ThinkingDots()
+                            : GptMarkdown(
+                                t.content,
+                                style: TextStyle(color: scheme.onSurface, height: 1.55),
+                              ),
+                      ]),
                     ),
-                  ],
-                ),
-              ),
             ),
             if (!mine && action != null && action['run_id'] != null)
               Padding(
-                padding: const EdgeInsets.only(left: 28, bottom: 6),
+                padding: const EdgeInsets.only(left: 2, bottom: 6),
                 child: _StepsCard(runId: action['run_id'] as String, status: '${action['status']}'),
               ),
             if (!mine && !t.streaming && t.content.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(left: 28),
+                padding: const EdgeInsets.only(left: 2),
                 child: _Thumbs(turn: t),
               ),
             if (!mine && (t.meta['searched'] as String?)?.isNotEmpty == true)
               Padding(
-                padding: const EdgeInsets.only(left: 28, bottom: 6),
+                padding: const EdgeInsets.only(left: 2, bottom: 6),
                 child: Text('Searched the web: ${t.meta['searched']}',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: scheme.onSurface.withValues(alpha: 0.55))),
@@ -1025,26 +1022,21 @@ class _ThinkingBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            height: 14,
-            width: 14,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: Theme.of(context).disabledColor),
-          ),
-          const SizedBox(width: 10),
-          Text('Thinking…', style: Theme.of(context).textTheme.bodySmall),
-        ]),
-      ),
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: Row(children: [
+        const JarvisOrb(state: OrbState.thinking, size: 18),
+        const SizedBox(width: 8),
+        Text('Jarvis',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.45),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                )),
+        const SizedBox(width: 10),
+        const _ThinkingDots(),
+      ]),
     );
   }
 }
