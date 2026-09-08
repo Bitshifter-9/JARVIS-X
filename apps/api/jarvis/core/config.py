@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     slack_scan_enabled: bool = True
     # Opt-in: check in on a promise once it's overdue ("did you do X?") (#40).
     accountability_enabled: bool = Field(default=False)
+    # Opt-in: a nightly sweep that prepares while you sleep, reported in the morning (#45).
+    overnight_agent_enabled: bool = Field(default=False)
 
     # ── YouTube pipeline ───────────────────────────────────────────────
     # Homebrew's core ffmpeg dropped libass (no burned captions); point this at a

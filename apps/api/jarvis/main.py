@@ -40,6 +40,7 @@ from jarvis.api.routes import (
     micro_lessons,
     notifications,
     oauth,
+    overnight,
     permissions,
     personas,
     places,
@@ -163,6 +164,7 @@ def create_app() -> FastAPI:
     app.include_router(alexa.router)
     app.include_router(auth.router)
     app.include_router(oauth.router)
+    app.include_router(overnight.router)
     app.include_router(goals.router)
     app.include_router(approvals.router)
     app.include_router(devices.router)

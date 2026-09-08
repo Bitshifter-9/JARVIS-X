@@ -132,6 +132,16 @@ async def beat(
                 learned.append(str(user.id))
         except Exception as exc:  # noqa: BLE001
             log.warning("learning_failed", error=str(exc)[:200])
+        # Overnight agent (#45, opt-in): prepare while they sleep, once per night.
+        if get_settings().overnight_agent_enabled:
+            try:
+                from jarvis.services.overnight import overnight_sweep
+
+                tz = user.timezone or get_settings().timezone
+                if await overnight_sweep(session, user.id, tz=tz, now=moment):
+                    log.info("overnight_swept", user=str(user.id))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("overnight_failed", error=str(exc)[:200])
         brief = await ModuleService(session).morning_brief(user.id, now=moment)
         for risk in brief.at_risk:
             goal_id = str(risk.goal_id)

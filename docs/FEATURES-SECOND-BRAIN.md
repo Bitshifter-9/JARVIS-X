@@ -94,6 +94,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#2 Ambient audio + #10 Meeting capture** — `macnode listen` / `macnode meeting` transcribe
   on the Mac (Whisper, audio discarded) and store only the text; a meeting's action items become
   tasks. Backend tested; Mac capture compile-checked (verify on your Mac).
+- ✅ **#45 Overnight agent** — an opt-in nightly sweep prepares while you sleep (promises,
+  insights, tomorrow's brief) and reports it in the morning; only safe, auditable prep.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -260,8 +262,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 44. ✅ **Auto-tasks from commitments.** A dated promise caught by #22 now spawns a linked task with no
     typing, so it enters the deadline/reminder machinery; "Coming up" defers to the task to avoid
     double-surfacing. Deterministic.
-45. ⬜ **Overnight agent.** Within standing permissions, it tidies, follows up, and prepares
-    while you sleep; every effectful step still auditable.
+45. ✅ **Overnight agent.** Opt-in (`overnight_agent_enabled`, a Settings toggle). In the local small
+    hours, once a night, the heartbeat runs a sweep — catches new promises, derives mail insights,
+    pre-warms tomorrow's brief — and records the report (`GET /v1/overnight`). Only steps the system
+    already does on request; nothing effectful runs without approval.
 46. ✅ **True cross-device continuity.** Start on the Mac, finish on the phone — *already true:* one
     account, one shared brain (Postgres), signed device nodes; nothing syncs device-to-device, both
     read the same state. Life-search, memory, goals and the self-model are identical on either.
