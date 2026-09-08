@@ -148,7 +148,14 @@ async def handle_normalize(session: AsyncSession, job, *, router=None) -> dict[s
     )
     await events.mark_processed(event.event_id)
     if outcome.error:
-        # The model could not be reached; the job retries with backoff by raising.
+        # A retry only helps a transient blip. Once the whole cascade is exhausted the
+        # regex reader has already had its turn, so retrying cannot succeed — it just
+        # spends more of the daily free quota, which is how a short outage becomes a
+        # day-long one (groq burned 199,417 of its 200,000 daily tokens on these retries).
+        if "all providers failed" in outcome.error:
+            log.warning("extraction_unavailable", error=outcome.error[:160])
+            return {"deadline": False, "model_unavailable": True, "triage": triage}
+        # Anything else is worth one backoff — raising is what schedules it.
         raise RuntimeError(f"extraction failed: {outcome.error}")
     if outcome.resolved is None:
         return {"deadline": False, "cached": outcome.cached, "triage": triage}

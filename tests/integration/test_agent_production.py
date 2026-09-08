@@ -568,3 +568,33 @@ async def test_extraction_falls_back_to_regex_when_the_model_is_exhausted(sessio
     task = await session.get(Task, uuid.UUID(outcome["task_id"]))
     assert task.due_at.year == 2026 and task.due_at.month == 9 and task.due_at.day == 9
     assert task.confidence == 0.55  # marked as the model-free read
+
+
+async def test_an_exhausted_cascade_is_not_retried_into_the_ground(session, user):
+    """Retrying a call the cascade cannot serve just burns the daily free quota — which is
+    how a short outage became a day-long one. The message is left without a deadline, not
+    re-queued five times."""
+    from jarvis.workers.agent import handle_normalize
+
+    class _Dead(ScriptedModel):
+        async def generate(self, request):  # noqa: ANN001
+            raise RuntimeError(
+                "all providers failed for extract — groq: rate limited; gemini: circuit open"
+            )
+
+    job = await _ingest(
+        session,
+        user,
+        provider="gmail",
+        object_id="msg-dead",
+        payload={
+            "kind": "email",
+            "title": "Quick question",
+            "author": "colleague@work.test",
+            # No date anywhere, so the regex reader cannot rescue it either.
+            "text": "Hey, do you have thoughts on the new onboarding copy?",
+        },
+    )
+    outcome = await handle_normalize(session, job, router=_router(session, _Dead()))
+    assert outcome["model_unavailable"] is True
+    assert outcome["deadline"] is False
