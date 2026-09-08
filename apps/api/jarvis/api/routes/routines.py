@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter
@@ -87,5 +88,9 @@ async def delete_routine(routine_id: uuid.UUID, user: CurrentUser, session: Sess
 @router.post("/{routine_id}/run", status_code=202)
 async def run_now(routine_id: uuid.UUID, user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     service = RoutineService(session)
-    job_id = await service.fire(await service.get(user.id, routine_id))
+    routine = await service.get(user.id, routine_id)
+    # One run per routine per minute: a double tap (or a retried request) must not send
+    # the same brief to Telegram twice.
+    minute = int(datetime.now(UTC).timestamp() // 60)
+    job_id = await service.fire(routine, key=f"routine:{routine.id}:manual:{minute}")
     return {"job_id": str(job_id) if job_id else None}

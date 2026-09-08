@@ -20,6 +20,8 @@ import time
 import uuid
 from collections.abc import Sequence
 from contextlib import contextmanager
+from dataclasses import replace
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,6 +111,25 @@ def _quota_exhausted(exc: Exception) -> bool:
     return "exceeded your current quota" in text or "rate limit reached" in text
 
 
+def _strict_objects(node: Any) -> Any:
+    """Set ``additionalProperties: false`` on every object in a JSON schema.
+
+    Groq (and OpenAI strict mode) reject a schema without it — "`additionalProperties:false`
+    must be set on every object" — which failed *every* structured call, tripped the breaker
+    and took the whole cascade down with it. Normalising here, where every schema-bearing
+    request already passes, means a new schema literal cannot reintroduce the outage.
+    Returns a copy: the schemas are module-level constants.
+    """
+    if isinstance(node, dict):
+        out = {k: _strict_objects(v) for k, v in node.items()}
+        if out.get("type") == "object":
+            out.setdefault("additionalProperties", False)
+        return out
+    if isinstance(node, list):
+        return [_strict_objects(v) for v in node]
+    return node
+
+
 class LLMRouter:
     def __init__(
         self,
@@ -129,6 +150,8 @@ class LLMRouter:
         Raises ``AllProvidersFailed`` carrying a per-provider reason, so a failure says
         *why* the system could not think rather than merely that it could not.
         """
+        if request.json_schema is not None:
+            request = replace(request, json_schema=_strict_objects(request.json_schema))
         order = self.cascade.get(request.call_class, ())
         budget = await self.budget.status()
         cooling = await self.health.cooling_down()

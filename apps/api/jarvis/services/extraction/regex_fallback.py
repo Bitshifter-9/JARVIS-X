@@ -35,7 +35,7 @@ _DATE = re.compile(
       (?P<d1>\d{1,2})(?:st|nd|rd|th)?\s+(?P<mon1>MONTHS)\.?(?:,?\s+(?P<y1>\d{4}))?
       | (?P<mon2>MONTHS)\.?\s+(?P<d2>\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(?P<y2>\d{4}))?
       | (?P<iso>\d{4}-\d{2}-\d{2})
-      | (?P<dmy>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})
+      | (?P<dmy>\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})
     )
     """.replace("MONTHS", _MONTH_NAMES)
 )
@@ -84,6 +84,36 @@ def _relative_date(text: str, received_at: datetime):  # noqa: ANN201
     return datetime(d.year, d.month, d.day)
 
 
+def _pick_date(text: str):
+    """The date the deadline actually refers to: the one nearest a cue word, not merely the
+    first in the message. A long thread says "we met on 3 Sept" long before "submit by 15
+    Oct" — taking the first match reads the wrong date."""
+    dates = list(_DATE.finditer(text))
+    if not dates:
+        return None
+    cues = [c.start() for c in _CUE.finditer(text)]
+    if not cues:
+        return dates[0]
+
+    def distance(m) -> int:  # noqa: ANN001
+        # A deadline follows its cue ("due 15 Oct"), so a date *before* the cue is a
+        # weaker candidate — weighted 3x so it only wins when nothing follows.
+        return min((m.start() - c) if m.start() >= c else (c - m.start()) * 3 for c in cues)
+
+    return min(dates, key=distance)
+
+
+def _pick_time(text: str, near: int | None):
+    """The time nearest the chosen date, so a "9am standup" earlier in the thread does not
+    set the hour for a deadline further down."""
+    times = [*_TIME.finditer(text), *_TIME24.finditer(text)]
+    if not times:
+        return None
+    if near is None:
+        return times[0]
+    return min(times, key=lambda t: abs(t.start() - near))
+
+
 def extract_deadline(
     body: str, subject: str, received_at: datetime, *, require_cue: bool = True
 ) -> ExtractedDeadline | None:
@@ -93,7 +123,7 @@ def extract_deadline(
     if require_cue and not _CUE.search(text) and not _WEEKDAY.search(text):
         return None
     year = received_at.year
-    m = _DATE.search(text)
+    m = _pick_date(text)
     date = None
     if m is None:
         # No explicit date — try a weekday or today/tomorrow/tonight.
@@ -106,7 +136,7 @@ def extract_deadline(
         elif m.group("iso"):
             date = datetime.fromisoformat(m.group("iso"))
         elif m.group("dmy"):
-            parts = [int(p) for p in re.split(r"[/-]", m.group("dmy"))]
+            parts = [int(p) for p in re.split(r"[/.-]", m.group("dmy"))]
             a, b = parts[0], parts[1]
             yr = parts[2] if len(parts) > 2 else year
             # Day-first (DD/MM), the norm where the owner is; swap only when it cannot be.
@@ -126,9 +156,14 @@ def extract_deadline(
 
     # A bare date already in the past for this year probably means next year.
     hour, minute, all_day = 23, 59, True
-    if "tonight" in text.lower():
+    low = text.lower()
+    if "tonight" in low:
         hour, minute, all_day = 20, 0, False
-    if t := (_TIME.search(text) or _TIME24.search(text)):
+    elif re.search(r"\b(cob|close of business|end of business)\b", low):
+        hour, minute, all_day = 17, 0, False
+    elif re.search(r"\b(eod|end of (?:the )?day)\b", low):
+        hour, minute, all_day = 23, 59, False
+    if t := _pick_time(text, m.start() if m is not None else None):
         all_day = False
         hour = int(t.group("h"))
         minute = int(t.groupdict().get("m") or 0)

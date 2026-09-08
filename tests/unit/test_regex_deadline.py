@@ -56,3 +56,44 @@ def test_relative_days(text, weekday, hour):
     if weekday is not None:
         assert parsed.weekday() == weekday
         assert parsed > NOW.replace(tzinfo=None)
+
+
+# ── long Slack threads and mixed formats (the no-model reader is the only extractor
+# when the LLM cascade is exhausted, so it has to survive real messages) ──────────
+def _due(text: str, subject: str = "Project update"):
+    from datetime import datetime
+
+    from jarvis.services.extraction.regex_fallback import extract_deadline
+
+    return extract_deadline(text, subject, datetime(2026, 9, 8, 10, 0))
+
+
+def test_picks_the_date_next_to_the_cue_not_the_first_in_the_thread():
+    """A long thread mentions an earlier date in passing; the deadline comes later."""
+    body = (
+        "Thanks everyone for the sync on 3 September, good discussion. "
+        + "We covered the migration plan and the rollout risks in detail. " * 40
+        + "Action item: please submit the final report by 15 October 2026."
+    )
+    got = _due(body)
+    assert got is not None and got.has_deadline
+    assert got.due_at_local.startswith("2026-10-15"), got.due_at_local
+
+
+def test_time_is_taken_from_beside_the_deadline_not_an_earlier_standup():
+    body = (
+        "Reminder: standup is at 9:00 am daily. "
+        + "Lots of unrelated chatter here. " * 30
+        + "The submission is due 15 October 2026 at 5 pm."
+    )
+    got = _due(body)
+    assert got is not None
+    assert got.due_at_local == "2026-10-15T17:00", got.due_at_local
+
+
+def test_dot_separated_and_cob_eod_formats():
+    assert _due("Invoice payment due 15.10.2026").due_at_local.startswith("2026-10-15")
+    cob = _due("Please submit the deck by 15 October 2026, COB")
+    assert cob.due_at_local == "2026-10-15T17:00", cob.due_at_local
+    eod = _due("Deadline: 15 October 2026 EOD")
+    assert eod.due_at_local == "2026-10-15T23:59", eod.due_at_local
