@@ -70,6 +70,9 @@ async def beat(
     from jarvis.services import activity
 
     await activity.prune(session)
+    from jarvis.services import places as places_svc
+
+    await places_svc.prune(session)
     # Forget the episodic memories that were never useful, so storage stays bounded.
     from jarvis.services.memory import MemoryService
 

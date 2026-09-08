@@ -643,6 +643,14 @@ class JarvisClient {
   Future<Map<String, dynamic>> focusAnalytics() async =>
       await _send('GET', '/v1/focus-analytics') as Map<String, dynamic>;
 
+  /// Your significant places, learned from coarse location (#5).
+  Future<List<Map<String, dynamic>>> places() async =>
+      (await _send('GET', '/v1/places') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  /// Report coarse location fixes for place learning (#5) — the server rounds to ~500 m.
+  Future<void> postLocation(String deviceId, List<Map<String, dynamic>> fixes) async =>
+      _send('POST', '/v1/devices/$deviceId/location', body: fixes);
+
   /// Time-travel: reconstruct a past day (#30). date = YYYY-MM-DD.
   Future<Map<String, dynamic>> timetravel(String date) async =>
       await _send('GET', '/v1/timetravel', query: {'day': date}) as Map<String, dynamic>;

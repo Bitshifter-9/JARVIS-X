@@ -87,6 +87,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   as a life-searchable `screen` source (verify capture on your Mac). #46 cross-device already true.
 - ✅ **#4 Reading/watching log** — `macnode --share-reading` logs the front browser tab (url +
   title) as a life-searchable `reading` source; the counterpart to screen memory for the web.
+- ✅ **#5 Location trails + place learning** — a "Places" card labels home/work/frequent from
+  coarse fixes (rounded to ~500 m server-side; context, not a map). Deterministic clustering.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -114,8 +116,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    (Safari/Chrome — url + title, video/article/pdf) to `/v1/devices/{id}/reading` every 45 s, a
    life-searchable `reading` source (30 days, one row per url per hour) that feeds interest-drift
    (#17). (Auto-summarising the content is the later on-device step; verify capture on your Mac.)
-5. ⬜ **Location trails + place learning.** Significant-location detection (home / work /
-   gym / a friend's) from the phone's coarse location, as context, not a map.
+5. ✅ **Location trails + place learning.** Coarse fixes are rounded to ~500 m *before storage*,
+   then clustered and labelled by when you're there — home (nights), work (weekday days), or a
+   frequent place. Context, never a map; 30-day retention, auto-pruned. A "Places" card on Insights
+   with an explicit "Add current location" (continuous background capture via the FGS is next).
 6. ⬜ **Media diary.** What you watched/listened to, with a one-line "why it mattered / what
    you took from it," so consumption becomes recall-able knowledge.
 7. ✅ **Clipboard history.** A searchable timeline of everything you copied, kept on the synced

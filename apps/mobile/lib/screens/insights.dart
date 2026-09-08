@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
+import '../node/platform_hooks.dart';
 import '../state/providers.dart';
 import '../theme.dart';
 
@@ -37,6 +38,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _gaps = const [];
   List<Map<String, dynamic>> _decisionsDue = const [];
   Map<String, dynamic> _focus = const {};
+  List<Map<String, dynamic>> _places = const [];
   Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -79,6 +81,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.decisionsDue(),
         client.focusAnalytics(),
         client.rediscover(),
+        client.places(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -104,6 +107,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _decisionsDue = results[19] as List<Map<String, dynamic>>;
         _focus = results[20] as Map<String, dynamic>;
         _rediscover = results[21] as Map<String, dynamic>;
+        _places = results[22] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -129,6 +133,38 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _addLocation() async {
+    final deviceId =
+        await ref.read(secureStorageProvider).read(key: 'phone_node_device_id');
+    if (deviceId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pair this phone in Devices first, then place learning can start.')));
+      }
+      return;
+    }
+    final fix = await platformLocate();
+    if (fix == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location unavailable — grant location permission.')));
+      }
+      return;
+    }
+    try {
+      await ref.read(clientProvider).postLocation(deviceId, [
+        {'lat': fix['lat'], 'lng': fix['lng'], 'at': DateTime.now().toUtc().toIso8601String()}
+      ]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Location added (rounded to ~500 m). Places emerge over time.')));
+      }
+      await _load();
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -289,6 +325,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_grouped.isNotEmpty) _GroupedCard(groups: _grouped),
                       if (_grouped.isNotEmpty) const SizedBox(height: 8),
                       _AwayCard(away: _away),
+                      const SizedBox(height: 8),
+                      _PlacesCard(places: _places, onAdd: _addLocation),
                       const SizedBox(height: 8),
                       _SpendingCard(spending: _spending),
                       const SizedBox(height: 8),
@@ -1421,6 +1459,59 @@ class _RediscoverCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text('From ${item['age_days']} days ago · because you mentioned "${item['because']}"',
               style: Theme.of(context).textTheme.labelSmall),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Significant places, learned from coarse location (#5) — home, work, the places you
+/// frequent. Coordinates are rounded to ~500 m server-side: context, not a map. "Add current
+/// location" contributes one coarse fix; places emerge from the pattern over time.
+class _PlacesCard extends StatelessWidget {
+  const _PlacesCard({required this.places, required this.onAdd});
+  final List<Map<String, dynamic>> places;
+  final Future<void> Function() onAdd;
+
+  static const _icon = {
+    'home': Icons.home_outlined,
+    'work': Icons.work_outline,
+    'frequent place': Icons.place_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.map_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Places', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: const Text('Add'),
+            ),
+          ]),
+          if (places.isEmpty)
+            Text('Where you spend time — learned from coarse location (rounded to ~500 m, '
+                'never a map). Tap Add to contribute a fix.',
+                style: Theme.of(context).textTheme.bodySmall)
+          else
+            for (final p in places)
+              ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_icon[p['label']] ?? Icons.place_outlined, size: 20),
+                title: Text('${p['label']}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                trailing: Text('${((p['share'] as num) * 100).round()}% of the time',
+                    style: Theme.of(context).textTheme.labelSmall),
+              ),
         ]),
       ),
     );

@@ -492,6 +492,28 @@ class ScreenIn(BaseModel):
     at: str | None = None
 
 
+class LocationIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    at: str | None = None
+
+
+@router.post("/{device_id}/location", status_code=202)
+async def post_location(
+    device_id: uuid.UUID, body: list[LocationIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Location trails (#5): a paired phone reports coarse fixes; the server rounds them to
+    ~500 m before storing, so it is context, not a map. Opt-in, 30-day retention."""
+    from jarvis.core.errors import Forbidden
+    from jarvis.services.places import record_locations
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+    stored = await record_locations(session, user.id, [s.model_dump() for s in body])
+    return {"stored": stored}
+
+
 class ReadingIn(BaseModel):
     url: str = Field(max_length=2000)
     title: str | None = Field(default=None, max_length=400)

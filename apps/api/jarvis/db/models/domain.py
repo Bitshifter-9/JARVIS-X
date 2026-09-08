@@ -228,3 +228,19 @@ class Decision(UUIDPrimaryKey, Timestamps, Base):
     outcome: Mapped[str | None] = mapped_column(String(16))
     outcome_note: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LocationSample(UUIDPrimaryKey, Timestamps, Base):
+    """A coarse location fix — rounded to ~500 m before it is ever stored, so it is context
+    ("you were near work") not a map of your movements (second-brain #5). Short retention.
+    """
+
+    __tablename__ = "location_samples"
+    __table_args__ = (Index("ix_location_samples_user_at", "user_id", "at"),)
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lng: Mapped[float] = mapped_column(Float, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
