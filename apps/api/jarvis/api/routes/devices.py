@@ -492,6 +492,64 @@ class ScreenIn(BaseModel):
     at: str | None = None
 
 
+class PhotoIn(BaseModel):
+    caption: str = Field(default="", max_length=300)  # on-device caption/label
+    text: str = Field(default="", max_length=4000)    # on-device OCR of the image
+    uri: str | None = Field(default=None, max_length=1000)  # local content:// or file uri
+    at: str | None = None
+
+
+@router.post("/{device_id}/photo", status_code=202)
+async def post_photo(
+    device_id: uuid.UUID, body: list[PhotoIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Photo & screenshot index (#8): a paired phone captions/OCRs each image *on-device* and
+    posts only the derived text (never the pixels), stored as a searchable ``photo`` source so
+    the camera roll becomes findable ("that receipt from Goa"). Opt-in, 30-day retention."""
+    import hashlib
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from jarvis.core.errors import Forbidden
+    from jarvis.core.ids import uuid7
+    from jarvis.db.models.source import SourceObject
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+
+    now = datetime.now(UTC)
+    retention = now + timedelta(days=30)
+    rows = []
+    seen: set[str] = set()
+    for p in body[:120]:
+        blob = f"{p.caption} {p.text}".strip()
+        if not blob:
+            continue
+        try:
+            at = datetime.fromisoformat(p.at) if p.at else now
+        except ValueError:
+            at = now
+        oid = f"{device_id}:{hashlib.sha256((p.uri or blob).encode()).hexdigest()[:16]}"
+        if oid in seen:
+            continue
+        seen.add(oid)
+        rows.append({
+            "id": uuid7(), "user_id": user.id, "provider": "photo",
+            "object_id": oid, "kind": "photo",
+            "title": (p.caption or "photo")[:300], "excerpt": blob[:4000],
+            "url": p.uri, "occurred_at": at, "retention_until": retention,
+        })
+    if rows:
+        stmt = pg_insert(SourceObject).values(rows).on_conflict_do_nothing(
+            index_elements=["provider", "account_id", "object_id"]
+        )
+        await session.execute(stmt)
+        await session.flush()
+    return {"stored": len(rows)}
+
+
 class TranscriptIn(BaseModel):
     text: str = Field(min_length=1, max_length=16000)
     kind: str = Field(default="ambient", pattern="^(ambient|meeting)$")  # #2 / #10
@@ -557,6 +615,29 @@ async def post_transcript(
                 tasks_created += 1
     await session.flush()
     return {"stored": 1, "tasks_created": tasks_created}
+
+
+class HealthIn(BaseModel):
+    day: str  # ISO date/datetime for the day
+    steps: int | None = Field(default=None, ge=0)
+    sleep_minutes: int | None = Field(default=None, ge=0)
+    active_minutes: int | None = Field(default=None, ge=0)
+
+
+@router.post("/{device_id}/health", status_code=202)
+async def post_health(
+    device_id: uuid.UUID, body: list[HealthIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Energy/health (#38): a paired phone reports daily steps/sleep (from Health Connect),
+    one row per day, correlated with your productivity. Opt-in."""
+    from jarvis.core.errors import Forbidden
+    from jarvis.services.health_metrics import record_health
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+    stored = await record_health(session, user.id, [s.model_dump() for s in body])
+    return {"stored": stored}
 
 
 class LocationIn(BaseModel):

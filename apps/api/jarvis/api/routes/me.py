@@ -129,6 +129,15 @@ async def timetravel(
     return await reconstruct_day(session, user.id, day, tz=tz)
 
 
+@router.get("/health-correlation")
+async def health_correlation(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """What moves your day: correlate sleep/steps with productivity (#38)."""
+    from jarvis.services.health_metrics import correlation
+
+    tz = user.timezone or get_settings().timezone
+    return await correlation(session, user.id, tz=tz)
+
+
 @router.get("/rhythm")
 async def rhythm(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     """Your energy curve by hour — when you focus and when you slump (#15), so nudges land

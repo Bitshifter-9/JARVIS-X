@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:health/health.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/models.dart';
@@ -41,6 +43,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _places = const [];
   List<Map<String, dynamic>> _media = const [];
   Map<String, dynamic> _commCoach = const {};
+  Map<String, dynamic> _health = const {};
   Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -86,6 +89,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.places(),
         client.mediaDiary(),
         client.commCoach(),
+        client.healthCorrelation(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -114,6 +118,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _places = results[22] as List<Map<String, dynamic>>;
         _media = results[23] as List<Map<String, dynamic>>;
         _commCoach = results[24] as Map<String, dynamic>;
+        _health = results[25] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -139,6 +144,106 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
       if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _connectHealth() async {
+    final deviceId =
+        await ref.read(secureStorageProvider).read(key: 'phone_node_device_id');
+    if (deviceId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pair this phone in Devices first.')));
+      }
+      return;
+    }
+    try {
+      final health = Health();
+      await health.configure();
+      const types = [HealthDataType.STEPS, HealthDataType.SLEEP_ASLEEP];
+      final ok = await health.requestAuthorization(types);
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Health access not granted.')));
+        }
+        return;
+      }
+      final now = DateTime.now();
+      final samples = <Map<String, dynamic>>[];
+      for (var d = 0; d < 21; d++) {
+        final end = DateTime(now.year, now.month, now.day).subtract(Duration(days: d));
+        final start = end.subtract(const Duration(days: 1));
+        final steps = await health.getTotalStepsInInterval(start, end) ?? 0;
+        final sleep = await health.getHealthDataFromTypes(
+            startTime: start, endTime: end, types: [HealthDataType.SLEEP_ASLEEP]);
+        var sleepMin = 0;
+        for (final p in sleep) {
+          sleepMin += p.dateTo.difference(p.dateFrom).inMinutes;
+        }
+        samples.add({
+          'day': start.toUtc().toIso8601String(),
+          'steps': steps,
+          'sleep_minutes': sleepMin,
+        });
+      }
+      await ref.read(clientProvider).postHealth(deviceId, samples);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Health synced. Correlations will appear as data builds.')));
+      }
+      await _load();
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Health: $e')));
+      }
+    }
+  }
+
+  Future<void> _indexPhoto() async {
+    final deviceId =
+        await ref.read(secureStorageProvider).read(key: 'phone_node_device_id');
+    if (deviceId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Pair this phone in Devices first.')));
+      }
+      return;
+    }
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    final controller = TextEditingController();
+    final caption = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('What is this photo?'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+              hintText: 'Receipt from Goa · whiteboard · a book cover'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Index'),
+          ),
+        ],
+      ),
+    );
+    if (caption == null || caption.isEmpty) return;
+    try {
+      await ref.read(clientProvider).postPhoto(deviceId, [
+        {'caption': caption, 'uri': picked.path,
+         'at': DateTime.now().toUtc().toIso8601String()}
+      ]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Indexed — find it later in search.')));
+      }
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
   }
 
@@ -295,6 +400,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         title: const Text('Insights'),
         actions: [
           IconButton(
+            tooltip: 'Index a photo',
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            onPressed: _indexPhoto,
+          ),
+          IconButton(
             tooltip: 'Look back at a day',
             icon: const Icon(Icons.history),
             onPressed: _timeTravel,
@@ -361,6 +471,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_meeting != null) _MeetingCard(meeting: _meeting!),
                       if (_meeting != null) const SizedBox(height: 8),
                       _StreaksCard(streaks: _streaks),
+                      const SizedBox(height: 8),
+                      _HealthCard(health: _health, onConnect: _connectHealth),
                       const SizedBox(height: 8),
                       if (_grouped.isNotEmpty) _GroupedCard(groups: _grouped),
                       if (_grouped.isNotEmpty) const SizedBox(height: 8),
@@ -1652,6 +1764,48 @@ class _CommCoachCard extends StatelessWidget {
                 ),
               ]),
             ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Energy/health correlation (#38): once you connect sleep/steps, this shows what actually
+/// moves your day — the correlation with your productivity. Deterministic, private.
+class _HealthCard extends StatelessWidget {
+  const _HealthCard({required this.health, required this.onConnect});
+  final Map<String, dynamic> health;
+  final Future<void> Function() onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final corrs =
+        (health['correlations'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.monitor_heart_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Energy & health', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: onConnect,
+              icon: const Icon(Icons.sync, size: 18),
+              label: const Text('Sync'),
+            ),
+          ]),
+          if (corrs.isEmpty)
+            Text('Connect sleep & steps (Health Connect) to learn what moves your day.',
+                style: Theme.of(context).textTheme.bodySmall)
+          else
+            for (final c in corrs)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text('${c['insight']}', style: Theme.of(context).textTheme.bodyMedium),
+              ),
         ]),
       ),
     );

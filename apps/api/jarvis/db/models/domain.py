@@ -244,3 +244,22 @@ class LocationSample(UUIDPrimaryKey, Timestamps, Base):
     lat: Mapped[float] = mapped_column(Float, nullable=False)
     lng: Mapped[float] = mapped_column(Float, nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class HealthSample(UUIDPrimaryKey, Timestamps, Base):
+    """A day of health metrics from the phone (steps, sleep) — read from Health Connect, one
+    row per day, correlated with your productivity so you learn what moves your day (#38).
+    """
+
+    __tablename__ = "health_samples"
+    __table_args__ = (
+        Index("uq_health_samples_user_day", "user_id", "day", unique=True),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    day: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    steps: Mapped[int | None] = mapped_column(Integer)
+    sleep_minutes: Mapped[int | None] = mapped_column(Integer)
+    active_minutes: Mapped[int | None] = mapped_column(Integer)

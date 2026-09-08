@@ -100,6 +100,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   corpus, so the local model becomes yours; runs and stays entirely on your Mac.
 - ✅ **#37 Communication coach** — a card that says who's waiting, who you've gone quiet on, and
   how your writing lands, each with a concrete fix (composes owed-replies, cadence and tone).
+- ✅ **#8 Photo index + #38 Energy/health** — index a photo by its caption/OCR (searchable, pixels
+  never leave the phone); connect sleep/steps and see what correlates with your productive days.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -137,8 +139,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    becomes recall-able knowledge. A "Media diary" card on Insights. `GET /v1/media-diary` + note.
 7. ✅ **Clipboard history.** A searchable timeline of everything you copied, kept on the synced
    clipboard (capped, newest-first, tap to re-copy). A "History" view on the Devices clipboard card.
-8. ⬜ **Photo & screenshot semantic index.** On-device caption + OCR every image once, store
-   the caption, make your camera roll searchable ("that receipt from Goa").
+8. ✅ **Photo & screenshot semantic index.** Pick a photo and index it by its text: the phone
+   posts only the caption/OCR (never the pixels) to `/v1/devices/{id}/photo`, a life-searchable
+   `photo` source — your camera roll becomes findable ("that receipt from Goa"). Shipped with a
+   manual caption via the image picker; automatic on-device OCR (ML Kit) is the drop-in upgrade.
 9. ✅ **One-tap / voice quick-capture.** Hold-to-talk anywhere → transcribed, classified,
    filed — the frictionless inbox for a fleeting thought.
 10. ✅ **Meeting & call capture.** `macnode meeting` transcribes a meeting on this Mac (Ctrl-C to
@@ -246,8 +250,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     your reply, who you've gone quiet on, and how your writing lands — each with a concrete fix.
     A "Communication coach" card on Insights, composing the comm signals (#28/#16/#12). Deterministic.
     (Precise reply-latency needs reliable sent-mail thread matching — the later upgrade.)
-38. ⬜ **Energy/health correlation.** If you connect sleep/steps, correlate them with your
-    productivity so you learn what actually moves your day.
+38. ✅ **Energy/health correlation.** Connect sleep & steps (Health Connect via the `health` plugin);
+    the server correlates each day's metric with that day's productivity (focus minutes + tasks
+    done, Pearson) and tells you what moves your day. An "Energy & health" card on Insights.
+    Backend tested; the Health Connect read needs your phone (grant + Health Connect installed).
 39. ✅ **Decision journal + outcome review.** Log a decision + your reasoning + what you expect;
     weeks later, when its review date arrives, JARVIS asks "did it work?" (worked / mixed / didn't)
     — so you learn to decide better. A "Decisions" card on Insights with a log sheet.

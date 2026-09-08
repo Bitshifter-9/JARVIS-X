@@ -662,6 +662,18 @@ class JarvisClient {
   Future<void> postLocation(String deviceId, List<Map<String, dynamic>> fixes) async =>
       _send('POST', '/v1/devices/$deviceId/location', body: fixes);
 
+  /// Index a photo by its on-device caption/OCR text — never the pixels (#8).
+  Future<void> postPhoto(String deviceId, List<Map<String, dynamic>> photos) async =>
+      _send('POST', '/v1/devices/$deviceId/photo', body: photos);
+
+  /// Report daily health metrics for correlation (#38).
+  Future<void> postHealth(String deviceId, List<Map<String, dynamic>> days) async =>
+      _send('POST', '/v1/devices/$deviceId/health', body: days);
+
+  /// What moves your day: sleep/steps vs productivity (#38).
+  Future<Map<String, dynamic>> healthCorrelation() async =>
+      await _send('GET', '/v1/health-correlation') as Map<String, dynamic>;
+
   /// Time-travel: reconstruct a past day (#30). date = YYYY-MM-DD.
   Future<Map<String, dynamic>> timetravel(String date) async =>
       await _send('GET', '/v1/timetravel', query: {'day': date}) as Map<String, dynamic>;
