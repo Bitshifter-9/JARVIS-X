@@ -252,3 +252,66 @@ def run_voice(*, api: str, access_token: str, wake_model: str, whisper_model: st
 
 
 __all__ = ["STOP_PHRASES", "ChatAsker", "ServerSpeaker", "VoiceLoop", "run_voice", "say"]
+
+
+def run_ambient(
+    *, api: str, access_token: str, device_id: str, whisper_model: str = "base"
+) -> None:
+    """Ambient transcription (#2): transcribe the room on this Mac and post only the *text*
+    (the audio is transcribed locally and discarded). Consent-gated by being explicit, with a
+    visible indicator; stop with Ctrl-C. Never runs silently."""
+    import httpx
+
+    whisper = Whisper(whisper_model)
+    api = api.rstrip("/")
+    print("🎙️  Ambient transcription ON — audio stays on this Mac and is discarded; only the "
+          "text is stored to your account. Ctrl-C to stop.")
+    while True:
+        audio = record_until_silence()
+        text = (whisper(audio) or "").strip()
+        if len(text) < 8:
+            continue
+        try:
+            httpx.post(
+                f"{api}/v1/devices/{device_id}/transcript",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"text": text, "kind": "ambient"},
+                timeout=20,
+            )
+        except Exception:  # noqa: BLE001, S110 — keep listening; a dropped post is fine
+            pass
+
+
+def run_meeting(
+    *, api: str, access_token: str, device_id: str, title: str = "Meeting",
+    whisper_model: str = "base",
+) -> None:
+    """Meeting capture (#10): transcribe on this Mac until Ctrl-C, then save the transcript and
+    let the server turn dated action items into tasks. Audio never leaves the Mac."""
+    import httpx
+
+    whisper = Whisper(whisper_model)
+    api = api.rstrip("/")
+    print(f"🎙️  Recording “{title}” on this Mac. Speak; Ctrl-C to end and save.")
+    parts: list[str] = []
+    try:
+        while True:
+            audio = record_until_silence()
+            text = (whisper(audio) or "").strip()
+            if text:
+                parts.append(text)
+                print("  …", text[:70])
+    except KeyboardInterrupt:
+        pass
+    transcript = " ".join(parts).strip()
+    if not transcript:
+        print("Nothing captured.")
+        return
+    resp = httpx.post(
+        f"{api}/v1/devices/{device_id}/transcript",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"text": transcript, "kind": "meeting", "title": title},
+        timeout=30,
+    )
+    made = resp.json().get("tasks_created", 0) if resp.status_code < 400 else 0
+    print(f"\nSaved the meeting. {made} action item(s) turned into tasks.")

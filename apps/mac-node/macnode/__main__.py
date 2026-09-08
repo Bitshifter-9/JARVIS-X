@@ -167,6 +167,44 @@ def voice(args: argparse.Namespace) -> int:
     return 0
 
 
+def _config_for_capture(args: argparse.Namespace) -> tuple[str, str, str] | None:
+    """(api, token, device_id) for the capture subcommands, or None with a message."""
+    if not CONFIG_PATH.exists():
+        print("Not paired yet. Run: python -m macnode pair …", file=sys.stderr)
+        return None
+    config = json.loads(CONFIG_PATH.read_text())
+    api = args.api or config["api"]
+    return api, _login(api, args.email or config["email"]), config["device_id"]
+
+
+def listen(args: argparse.Namespace) -> int:
+    """Ambient transcription (#2): transcribe the room on this Mac, store only the text."""
+    from macnode.voice import run_ambient
+
+    got = _config_for_capture(args)
+    if got is None:
+        return 1
+    api, token, device_id = got
+    try:
+        run_ambient(api=api, access_token=token, device_id=device_id, whisper_model=args.whisper)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    return 0
+
+
+def meeting(args: argparse.Namespace) -> int:
+    """Meeting capture (#10): transcribe on this Mac, save it, extract action items to tasks."""
+    from macnode.voice import run_meeting
+
+    got = _config_for_capture(args)
+    if got is None:
+        return 1
+    api, token, device_id = got
+    run_meeting(api=api, access_token=token, device_id=device_id,
+                title=args.title, whisper_model=args.whisper)
+    return 0
+
+
 def gestures(args: argparse.Namespace) -> int:
     """Webcam gestures: palm stops speech, thumbs decide the one pending approval."""
     from macnode.gestures import run_gestures
@@ -225,6 +263,21 @@ def main() -> int:
     voice_cmd.add_argument("--wake", default="hey_jarvis", help="openWakeWord model name")
     voice_cmd.add_argument("--whisper", default="base", help="faster-whisper model size")
     voice_cmd.set_defaults(func=voice)
+
+    listen_cmd = sub.add_parser(
+        "listen", help="ambient transcription (#2): transcribe the room, store only the text")
+    listen_cmd.add_argument("--api")
+    listen_cmd.add_argument("--email")
+    listen_cmd.add_argument("--whisper", default="base", help="faster-whisper model size")
+    listen_cmd.set_defaults(func=listen)
+
+    meeting_cmd = sub.add_parser(
+        "meeting", help="meeting capture (#10): transcribe a meeting, extract action items")
+    meeting_cmd.add_argument("--api")
+    meeting_cmd.add_argument("--email")
+    meeting_cmd.add_argument("--title", default="Meeting")
+    meeting_cmd.add_argument("--whisper", default="base", help="faster-whisper model size")
+    meeting_cmd.set_defaults(func=meeting)
 
     gestures_cmd = sub.add_parser("gestures", help="webcam gestures on this Mac")
     gestures_cmd.add_argument("--api")

@@ -91,6 +91,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   coarse fixes (rounded to ~500 m server-side; context, not a map). Deterministic clustering.
 - ✅ **#6 Media diary** — the reading/watching log becomes an annotatable diary: add "why it
   mattered" to what you watched/read and it turns into searchable knowledge.
+- ✅ **#2 Ambient audio + #10 Meeting capture** — `macnode listen` / `macnode meeting` transcribe
+  on the Mac (Whisper, audio discarded) and store only the text; a meeting's action items become
+  tasks. Backend tested; Mac capture compile-checked (verify on your Mac).
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -108,9 +111,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    `/v1/devices/{id}/screen` — the screenshot is deleted immediately; a stored `screen` source,
    30-day retention, read by life-search. Rewind-style recall, no disk cost. (Verify capture on
    your Mac; needs Screen Recording permission + pyobjc-framework-Vision.)
-2. ⬜ **Ambient audio → transcript.** Opt-in, on-device Whisper (already used by
-   `macnode voice`); store the *diarised text*, discard the audio within seconds.
-   Consent-gated (never record others without a visible indicator).
+2. ✅ **Ambient audio → transcript.** `macnode listen` transcribes the room on this Mac with the
+   existing faster-whisper and posts only the *text* to `/v1/devices/{id}/transcript` (a searchable
+   `transcript` source) — the audio is transcribed locally and discarded. Consent-gated: explicit
+   subcommand + a visible 🎙️ indicator, never silent. (Verify capture on your Mac; diarisation is next.)
 3. ✅ **App & usage timeline, unified.** *Already built:* the Android `UsageStats` sampler **and**
    `macnode run --share-activity` both post the foreground app + title to `/v1/devices/{id}/activity`
    (titles only, 30-day retention), one cross-device stream that #36 Focus analytics reads.
@@ -131,8 +135,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    the caption, make your camera roll searchable ("that receipt from Goa").
 9. ✅ **One-tap / voice quick-capture.** Hold-to-talk anywhere → transcribed, classified,
    filed — the frictionless inbox for a fleeting thought.
-10. ⬜ **Meeting & call capture.** Auto-transcribe (with consent), then extract summary,
-    decisions, and action items into tasks.
+10. ✅ **Meeting & call capture.** `macnode meeting` transcribes a meeting on this Mac (Ctrl-C to
+    end), saves the transcript, and the server turns its dated action items into tracked tasks.
+    On-device Whisper, audio discarded. (Verify capture on your Mac.)
 
 ## B. The learning layer — becoming *you*
 

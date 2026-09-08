@@ -492,6 +492,73 @@ class ScreenIn(BaseModel):
     at: str | None = None
 
 
+class TranscriptIn(BaseModel):
+    text: str = Field(min_length=1, max_length=16000)
+    kind: str = Field(default="ambient", pattern="^(ambient|meeting)$")  # #2 / #10
+    title: str | None = Field(default=None, max_length=300)
+    at: str | None = None
+
+
+@router.post("/{device_id}/transcript", status_code=202)
+async def post_transcript(
+    device_id: uuid.UUID, body: TranscriptIn, user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Ambient audio (#2) / meeting capture (#10): a paired device posts the on-device
+    *transcript* (the audio was transcribed locally and discarded). Stored as a searchable
+    ``transcript`` source; a meeting also gets its dated action items turned into tasks."""
+    import hashlib
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.core.errors import Forbidden
+    from jarvis.db.models.source import SourceObject
+    from jarvis.services.goal import GoalService
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+
+    now = datetime.now(UTC)
+    try:
+        at = datetime.fromisoformat(body.at) if body.at else now
+    except ValueError:
+        at = now
+    digest = hashlib.sha256(body.text.encode()).hexdigest()[:16]
+    title = body.title or ("Meeting" if body.kind == "meeting" else "Overheard")
+    session.add(SourceObject(
+        user_id=user.id, provider="voice", object_id=f"{device_id}:{digest}",
+        kind="transcript", title=title[:300], excerpt=body.text[:16000],
+        occurred_at=at, retention_until=now + timedelta(days=30),
+        raw={"transcript_kind": body.kind},
+    ))
+
+    tasks_created = 0
+    if body.kind == "meeting":
+        # Turn dated action items in the meeting into tracked tasks (#10).
+        from jarvis.services.extraction.regex_fallback import extract_deadline
+        from jarvis.services.extraction.resolver import resolve
+
+        tz = user.timezone or get_settings().timezone
+        for line in body.text.split("."):
+            line = line.strip()
+            if len(line) < 6:
+                continue
+            guessed = extract_deadline(line, line, at, require_cue=True)
+            if guessed is None or not guessed.has_deadline:
+                continue
+            try:
+                r = resolve(guessed, received_at=at, default_timezone=tz)
+            except Exception:  # noqa: BLE001
+                r = None
+            if r and r.due_at:
+                await GoalService(session).create_task(
+                    user.id, title=(guessed.title or line)[:500], due_at=r.due_at,
+                    timezone=tz, evidence_span=line[:500], confidence=0.5,
+                )
+                tasks_created += 1
+    await session.flush()
+    return {"stored": 1, "tasks_created": tasks_created}
+
+
 class LocationIn(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
