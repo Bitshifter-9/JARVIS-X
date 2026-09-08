@@ -672,6 +672,10 @@ class JarvisClient {
   Future<Map<String, dynamic>> speechProfile() async =>
       await _send('GET', '/v1/profile/speech') as Map<String, dynamic>;
 
+  /// A 3-minute micro-lesson for a topic you keep asking about (#35).
+  Future<Map<String, dynamic>> microLesson(String topic) async =>
+      await _send('GET', '/v1/micro-lesson', query: {'topic': topic}) as Map<String, dynamic>;
+
   /// Knowledge gaps: topics you keep asking about (#29).
   Future<List<Map<String, dynamic>>> knowledgeGaps() async =>
       ((await _send('GET', '/v1/profile/knowledge-gaps') as Map<String, dynamic>)['gaps']

@@ -485,6 +485,67 @@ class ActivityIn(BaseModel):
     at: str | None = None
 
 
+class ScreenIn(BaseModel):
+    app: str = Field(default="", max_length=200)
+    title: str | None = Field(default=None, max_length=300)
+    text: str = Field(max_length=8000)  # the OCR'd text — never the screenshot (#1)
+    at: str | None = None
+
+
+@router.post("/{device_id}/screen", status_code=202)
+async def post_screen(
+    device_id: uuid.UUID, body: list[ScreenIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Screen memory (#1): a paired Mac posts the OCR'd *text* of the active window (never a
+    pixel), stored as a searchable ``screen`` source, opt-in, 30-day retention. Life-search
+    reads it — Rewind-style recall without the disk cost. No task extraction."""
+    import hashlib
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from jarvis.core.errors import Forbidden
+    from jarvis.core.ids import uuid7
+    from jarvis.db.models.source import SourceObject
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+
+    now = datetime.now(UTC)
+    retention = now + timedelta(days=30)
+    rows = []
+    seen: set[str] = set()
+    for s in body[:120]:
+        text = (s.text or "").strip()
+        if not text:
+            continue
+        try:
+            at = datetime.fromisoformat(s.at) if s.at else now
+        except ValueError:
+            at = now
+        digest = hashlib.sha256(f"{s.app}|{s.title}|{text}".encode()).hexdigest()[:16]
+        oid = f"{device_id}:{digest}"
+        if oid in seen:
+            continue
+        seen.add(oid)
+        rows.append({
+            "id": uuid7(), "user_id": user.id, "provider": "screen",
+            "object_id": oid, "kind": "screen",
+            "title": (s.title or s.app or "screen")[:300],
+            "excerpt": text[:8000], "author": s.app or None,
+            "occurred_at": at, "retention_until": retention,
+        })
+    if rows:
+        # Duplicate identical windows are common — skip them, don't error.
+        stmt = pg_insert(SourceObject).values(rows).on_conflict_do_nothing(
+            index_elements=["provider", "account_id", "object_id"]
+        )
+        await session.execute(stmt)
+        await session.flush()
+    return {"stored": len(rows)}
+
+
 @router.post("/{device_id}/activity", status_code=202)
 async def post_activity(
     device_id: uuid.UUID, body: list[ActivityIn], user: CurrentUser, session: SessionDep

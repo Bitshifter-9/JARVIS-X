@@ -23,6 +23,7 @@ from macnode.guard import JobGuard, LocalPolicy
 log = get_logger(__name__)
 
 ACTIVITY_SAMPLE_SECONDS = 30
+SCREEN_SAMPLE_SECONDS = 90  # screen memory (#1): OCR the active window every 90 s
 HEARTBEAT_SECONDS = 30
 BACKOFF_CAP_SECONDS = 60.0
 
@@ -41,6 +42,9 @@ class NodeConfig:
     # Post the frontmost app and window title every 30 s (PLAN.md 10.6.3). Off by
     # default; `python -m macnode run --share-activity` turns it on. Titles only.
     share_activity: bool = False
+    # Screen memory (#1): OCR the active window on-device and post only the *text* (never a
+    # pixel). Off by default; `--share-screen` turns it on. Needs Screen Recording permission.
+    share_screen: bool = False
 
 
 def make_uploader(api_http_url: str, access_token: str, device_id: str):  # noqa: ANN201
@@ -119,13 +123,17 @@ class MacNode:
             sampler = (
                 asyncio.create_task(self._sample_activity()) if self.config.share_activity else None
             )
+            screen = (
+                asyncio.create_task(self._sample_screen()) if self.config.share_screen else None
+            )
             try:
                 async for raw in socket:
                     await self._on_message(socket, json.loads(raw))
             finally:
                 heartbeat.cancel()
-                if sampler is not None:
-                    sampler.cancel()
+                for task in (sampler, screen):
+                    if task is not None:
+                        task.cancel()
 
     async def _heartbeat(self, socket) -> None:  # noqa: ANN001
         while True:
@@ -167,6 +175,43 @@ class MacNode:
                     batch.clear()
             except Exception as exc:  # noqa: BLE001 — keep sampling; post next time
                 log.debug("activity_post_failed", error=str(exc)[:80])
+
+    async def _sample_screen(self) -> None:
+        """Screen memory (#1): every 90 s, OCR the active window on-device and post only the
+        *text* (app, title, recognised text) — the screenshot is deleted immediately, so a
+        picture of the desktop never leaves the Mac. Life-search reads it back."""
+        import contextlib
+        import os
+
+        import httpx
+
+        while True:
+            await asyncio.sleep(SCREEN_SAMPLE_SECONDS)
+            if not self.config.api_http_url:
+                continue
+            try:
+                window = self.adapter.frontmost_window()
+                bundle = window.frontmost_bundle_id
+                if not bundle:
+                    continue
+                capture = self.adapter.capture_window(bundle)
+                if capture is None or not capture.path:
+                    continue
+                text = self.adapter.ocr_image(capture.path)
+                with contextlib.suppress(OSError):
+                    os.unlink(capture.path)  # keep the derived text, discard the pixels
+                if not text.strip():
+                    continue
+                await asyncio.to_thread(
+                    httpx.post,
+                    f"{self.config.api_http_url}/v1/devices/{self.config.device_id}/screen",
+                    headers={"Authorization": f"Bearer {self.config.access_token}"},
+                    json=[{"app": bundle, "title": window.window_title, "text": text[:8000],
+                           "at": datetime.now(UTC).isoformat()}],
+                    timeout=20,
+                )
+            except Exception as exc:  # noqa: BLE001 — keep sampling; try again next tick
+                log.debug("screen_sample_failed", error=str(exc)[:80])
 
     async def _on_message(self, socket, message: dict[str, Any]) -> None:  # noqa: ANN001
         kind = message.get("type")

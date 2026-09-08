@@ -82,6 +82,9 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   "Ask my twin" answers as you from the self-model; dated promises auto-spawn tracked tasks;
   an opt-in check-in nudges overdue promises once; and the Mac/phone usage timeline (macnode
   `--share-activity` + Android UsageStats) was already feeding the activity stream.
+- ✅ **#35 Micro-lessons + #1 Screen memory** — tap a knowledge-gap chip for a 3-minute lesson;
+  and `macnode --share-screen` OCRs the active window on-device (Vision), storing only the text
+  as a life-searchable `screen` source (verify capture on your Mac). #46 cross-device already true.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -94,9 +97,11 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 
 ## A. Ambient capture — the raw material (on-device, opt-in, privacy-gated)
 
-1. ⬜ **Screen memory (Mac).** Periodic on-device OCR of the active window → store the
-   *text + app + title + time*, never the screenshot. Rewind-style recall without the
-   disk cost. (`macnode` + `SourceObject` kind `screen`.)
+1. ✅ **Screen memory (Mac).** `macnode run --share-screen` OCRs the active window on-device via
+   the macOS Vision framework every 90 s and posts only the *text* (app + title + time) to
+   `/v1/devices/{id}/screen` — the screenshot is deleted immediately; a stored `screen` source,
+   30-day retention, read by life-search. Rewind-style recall, no disk cost. (Verify capture on
+   your Mac; needs Screen Recording permission + pyobjc-framework-Vision.)
 2. ⬜ **Ambient audio → transcript.** Opt-in, on-device Whisper (already used by
    `macnode voice`); store the *diarised text*, discard the audio within seconds.
    Consent-gated (never record others without a visible indicator).
@@ -206,8 +211,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 34. ✅ **Skill & goal progress.** Milestones, trajectory, honest "on track / behind."
     *Already shipped:* the goal engine's prediction (`/goals/{id}/prediction`) — completion
     probability, critical path, and the fixes that would change the outcome.
-35. ⬜ **Personalised micro-lessons.** "How to improve X" turned into 3-minute lessons from
-    *your* gaps, delivered on a spaced schedule.
+35. ✅ **Personalised micro-lessons.** A gap you keep hitting (#29) → a crisp 3-minute lesson (a
+    few points + one action) through the free/local cascade. Tap a "you keep asking about" chip on
+    the About-you card. `GET /v1/micro-lesson`. (Spaced delivery is the later scheduling polish.)
 36. ✅ **Focus analytics.** Deep-work vs distraction minutes, the apps that pull you away (ranked),
     and your best focus window — over the activity samples a device collected. A "Focus" card on
     Insights (empty until a device is sampling). Deterministic, no model.
@@ -224,7 +230,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 
 ## E. Full automation — hands-free on mobile + Mac
 
-41. ⬜ **Autonomous morning brief & evening wind-down.** Run themselves; no prompt.
+41. 🚧 **Autonomous morning brief & evening wind-down.** Run themselves; no prompt. *Shipped:* the
+    heartbeat computes the morning brief every tick and alerts on newly at-risk goals, and the
+    "What matters now" digest (#25) is the always-on brief. A scheduled push at set times is next.
 42. 🚧 **Auto-triage everything.** Mail, messages, notifications → only the few that need
     *you* surface. *Shipped for mail:* triage classifies every message (needs_reply / fyi /
     deadline / spam / newsletter) and drafts the reply that's owed. Unifying messages and phone
@@ -238,14 +246,16 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     double-surfacing. Deterministic.
 45. ⬜ **Overnight agent.** Within standing permissions, it tidies, follows up, and prepares
     while you sleep; every effectful step still auditable.
-46. ⬜ **True cross-device continuity.** Start on the Mac, finish on the phone, seamlessly —
-    one brain, one context (the architecture already shares state).
+46. ✅ **True cross-device continuity.** Start on the Mac, finish on the phone — *already true:* one
+    account, one shared brain (Postgres), signed device nodes; nothing syncs device-to-device, both
+    read the same state. Life-search, memory, goals and the self-model are identical on either.
 47. 🚧 **Fully hands-free voice mode.** Wake → understand → do → confirm, no screen.
     *Shipped:* the on-device wake loop (`wake_service.dart`) runs in a foreground service,
     listens for the wake word, sends the ask, and speaks the reply. Hardening it across every
     device state is the remaining work (needs on-device verification).
-48. ⬜ **Scheduled autonomous workflows.** Weekly review, inbox cleanup, follow-up sweeps —
-    on a cron, reported after.
+48. 🚧 **Scheduled autonomous workflows.** *Shipped:* the routines engine runs scheduled actions and
+    the heartbeat runs periodic sweeps (memory prune, activity prune, commitment scan, learning);
+    `/v1/review/weekly` is the weekly rollup. A user-defined workflow cron is the remaining piece.
 49. 🚧 **Smart notification layer.** Batched, ranked, with a live-activity for the *one* thing
     that matters now. *Shipped:* the escalation ladder, the HUD live-activity, grouped-activity
     batching, and the "What matters now" ranking (#25). A single batched push digest is next.

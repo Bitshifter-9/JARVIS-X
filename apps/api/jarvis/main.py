@@ -36,6 +36,7 @@ from jarvis.api.routes import (
     me,
     memories,
     metrics,
+    micro_lessons,
     notifications,
     oauth,
     permissions,
@@ -172,6 +173,7 @@ def create_app() -> FastAPI:
     app.include_router(profile.router)
     app.include_router(system_routes.router)
     app.include_router(metrics.router)
+    app.include_router(micro_lessons.router)
     app.include_router(connectors.router)
     app.include_router(youtube.router)
     app.include_router(settings_routes.router)

@@ -135,6 +135,7 @@ def run(args: argparse.Namespace) -> int:
             allowed_bundle_ids=set(config["allowed_bundle_ids"]),
             api_http_url=api,
             share_activity=bool(getattr(args, "share_activity", False)),
+            share_screen=bool(getattr(args, "share_screen", False)),
         )
     )
     print(f"Connecting as device {config['device_id']}… Ctrl-C to stop.")
@@ -200,6 +201,12 @@ def main() -> int:
         "--share-activity",
         action="store_true",
         help="post the frontmost app and window title every 30 s (titles only, 30 days)",
+    )
+    run_cmd.add_argument(
+        "--share-screen",
+        action="store_true",
+        help="screen memory (#1): OCR the active window on-device every 90 s and post only "
+        "the text — never a pixel (needs Screen Recording permission, 30 days)",
     )
     run_cmd.add_argument("--api")
     run_cmd.add_argument("--email")

@@ -160,6 +160,43 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     );
   }
 
+  Future<void> _showLesson(String topic) async {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.7,
+        builder: (ctx, controller) => FutureBuilder<Map<String, dynamic>>(
+          future: ref.read(clientProvider).microLesson(topic),
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return const Center(child: Padding(
+                  padding: EdgeInsets.all(32), child: CircularProgressIndicator()));
+            }
+            final lesson = snap.data!['lesson'] as String?;
+            final reason = snap.data!['reason'] as String?;
+            return ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              children: [
+                Row(children: [
+                  const Icon(Icons.school_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(topic, style: Theme.of(ctx).textTheme.titleMedium)),
+                ]),
+                const SizedBox(height: 12),
+                Text(lesson ?? reason ?? "Couldn't make a lesson right now.",
+                    style: Theme.of(ctx).textTheme.bodyMedium),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _showLogDecision(BuildContext context) async {
     final logged = await showModalBottomSheet<bool>(
       context: context,
@@ -268,7 +305,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_focus['enough_data'] == true) _FocusCard(focus: _focus),
                       if (_hasAboutYou) const SizedBox(height: 8),
                       if (_hasAboutYou)
-                        _AboutYouCard(mood: _mood, speech: _speech, gaps: _gaps),
+                        _AboutYouCard(
+                            mood: _mood, speech: _speech, gaps: _gaps, onLesson: _showLesson),
                     ],
                   ),
                 ),
@@ -1005,10 +1043,12 @@ class _RhythmCard extends StatelessWidget {
 /// private mood trend (#18), how you phrase things (#12), and topics you keep asking about
 /// (#29). One card, so it informs without crowding.
 class _AboutYouCard extends StatelessWidget {
-  const _AboutYouCard({required this.mood, required this.speech, required this.gaps});
+  const _AboutYouCard(
+      {required this.mood, required this.speech, required this.gaps, required this.onLesson});
   final Map<String, dynamic> mood;
   final Map<String, dynamic> speech;
   final List<Map<String, dynamic>> gaps;
+  final void Function(String topic) onLesson;
 
   @override
   Widget build(BuildContext context) {
@@ -1061,14 +1101,16 @@ class _AboutYouCard extends StatelessWidget {
           ],
           if (gaps.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text('You keep asking about:', style: Theme.of(context).textTheme.bodyMedium),
+            Text('You keep asking about (tap for a 3-min lesson):',
+                style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 6),
             Wrap(spacing: 6, runSpacing: 6, children: [
               for (final g in gaps.take(6))
-                Chip(
+                ActionChip(
                   visualDensity: VisualDensity.compact,
                   avatar: const Icon(Icons.school_outlined, size: 14),
                   label: Text('${g['topic']}'),
+                  onPressed: () => onLesson('${g['topic']}'),
                 ),
             ]),
           ],

@@ -79,6 +79,7 @@ class MacAdapter(Protocol):
     def keystroke(self, text: str) -> bool: ...
     def key_press(self, key: str, modifiers: list[str]) -> bool: ...
     def capture_screen(self) -> CaptureResult | None: ...
+    def ocr_image(self, path: str) -> str: ...
     def clipboard_read(self) -> str: ...
     def clipboard_write(self, text: str) -> bool: ...
     def notify(self, title: str, body: str) -> bool: ...
@@ -410,6 +411,35 @@ class PyObjCAdapter:
             digest = hashlib.sha256(handle.read()).hexdigest()
         return CaptureResult(digest=f"sha256:{digest}", width=0, height=0, path=path)
 
+    def ocr_image(self, path: str) -> str:
+        """On-device OCR of a screenshot via the macOS Vision framework (screen memory #1).
+        Returns the recognised text, or "" if Vision isn't available — the pixels never leave
+        the Mac; only this text does. Requires pyobjc-framework-Vision."""
+        try:
+            import Quartz  # noqa: PLC0415
+            import Vision  # noqa: PLC0415
+            from Foundation import NSURL  # noqa: PLC0415
+
+            url = NSURL.fileURLWithPath_(path)
+            source = Quartz.CGImageSourceCreateWithURL(url, None)
+            if source is None:
+                return ""
+            image = Quartz.CGImageSourceCreateImageAtIndex(source, 0, None)
+            if image is None:
+                return ""
+            handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(image, None)
+            request = Vision.VNRecognizeTextRequest.alloc().init()
+            request.setRecognitionLevel_(1)  # accurate
+            handler.performRequests_error_([request], None)
+            lines: list[str] = []
+            for obs in request.results() or []:
+                candidate = obs.topCandidates_(1)
+                if candidate:
+                    lines.append(str(candidate[0].string()))
+            return "\n".join(lines)
+        except Exception:  # noqa: BLE001 — no Vision, no OCR; the loop just skips
+            return ""
+
     def clipboard_read(self) -> str:
         _, output = self.run_argv(["/usr/bin/pbpaste"], timeout=5)
         return output
@@ -607,6 +637,7 @@ class FakeMacAdapter:
     elements: dict[str, list[UIElement]] = field(default_factory=dict)
     pressed: list[tuple[str, str]] = field(default_factory=list)
     capture: CaptureResult | None = None
+    ocr_text: str = ""
     scoped_files: set[str] = field(default_factory=set)
     # Set when an app can be launched but refuses to come forward — the exact condition
     # the repair graph exists to handle.
@@ -708,6 +739,9 @@ class FakeMacAdapter:
 
     def capture_screen(self) -> CaptureResult | None:
         return self.capture if self.screen_recording else None
+
+    def ocr_image(self, path: str) -> str:
+        return self.ocr_text
 
     def clipboard_read(self) -> str:
         return self.clipboard
