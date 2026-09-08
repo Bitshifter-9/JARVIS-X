@@ -38,3 +38,14 @@ def test_an_explicit_setting_is_respected_and_the_constant_is_not_mutated():
     out = _strict_objects(DEADLINE_JSON_SCHEMA)
     assert out["additionalProperties"] is False
     assert ("additionalProperties" in DEADLINE_JSON_SCHEMA) == before  # copy, not in place
+
+
+def test_deadline_schema_is_strict_complete():
+    """Strict structured output also demands every property in ``required`` — Groq's second
+    rejection after additionalProperties. Optional fields are nullable, so this is free."""
+    props = set(DEADLINE_JSON_SCHEMA["properties"])
+    assert set(DEADLINE_JSON_SCHEMA["required"]) == props
+    # Anything not conceptually required must accept null.
+    for key in ("title", "due_at_local", "timezone", "estimate_minutes", "owner",
+                "evidence_span", "ambiguity"):
+        assert "null" in DEADLINE_JSON_SCHEMA["properties"][key]["type"], key

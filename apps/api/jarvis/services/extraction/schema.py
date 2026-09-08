@@ -52,7 +52,12 @@ DEADLINE_JSON_SCHEMA: dict[str, Any] = {
         "evidence_span": {"type": ["string", "null"]},
         "ambiguity": {"type": ["string", "null"]},
     },
-    "required": ["has_deadline", "confidence"],
+    # Strict structured output (Groq/OpenAI) requires *every* property here; the optional
+    # ones are nullable, so "required" costs nothing but a null.
+    "required": [
+        "has_deadline", "title", "due_at_local", "timezone", "all_day", "estimate_minutes",
+        "owner", "kind", "confidence", "evidence_span", "ambiguity",
+    ],
 }
 
 
