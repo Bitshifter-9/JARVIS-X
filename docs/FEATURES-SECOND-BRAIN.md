@@ -98,6 +98,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   insights, tomorrow's brief) and reports it in the morning; only safe, auditable prep.
 - ✅ **#20 Personal LoRA** — a Mac (mlx-lm) fine-tune script trains a personal adapter on your own
   corpus, so the local model becomes yours; runs and stays entirely on your Mac.
+- ✅ **#37 Communication coach** — a card that says who's waiting, who you've gone quiet on, and
+  how your writing lands, each with a concrete fix (composes owed-replies, cadence and tone).
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -240,8 +242,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 36. ✅ **Focus analytics.** Deep-work vs distraction minutes, the apps that pull you away (ranked),
     and your best focus window — over the activity samples a device collected. A "Focus" card on
     Insights (empty until a device is sampling). Deterministic, no model.
-37. ⬜ **Communication coach.** Your reply latency, tone drift, who you ghost — with concrete
-    fixes.
+37. ✅ **Communication coach.** One read on how you're keeping up with people — who's waiting on
+    your reply, who you've gone quiet on, and how your writing lands — each with a concrete fix.
+    A "Communication coach" card on Insights, composing the comm signals (#28/#16/#12). Deterministic.
+    (Precise reply-latency needs reliable sent-mail thread matching — the later upgrade.)
 38. ⬜ **Energy/health correlation.** If you connect sleep/steps, correlate them with your
     productivity so you learn what actually moves your day.
 39. ✅ **Decision journal + outcome review.** Log a decision + your reasoning + what you expect;

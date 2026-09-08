@@ -40,6 +40,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Map<String, dynamic> _focus = const {};
   List<Map<String, dynamic>> _places = const [];
   List<Map<String, dynamic>> _media = const [];
+  Map<String, dynamic> _commCoach = const {};
   Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -84,6 +85,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.rediscover(),
         client.places(),
         client.mediaDiary(),
+        client.commCoach(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -111,6 +113,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _rediscover = results[21] as Map<String, dynamic>;
         _places = results[22] as List<Map<String, dynamic>>;
         _media = results[23] as List<Map<String, dynamic>>;
+        _commCoach = results[24] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -326,6 +329,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_people.any((p) => p['quiet'] == true))
                         _PeopleCard(people: _people),
                       if (_people.any((p) => p['quiet'] == true))
+                        const SizedBox(height: 8),
+                      if ((_commCoach['observations'] as List?)?.isNotEmpty == true)
+                        _CommCoachCard(coach: _commCoach),
+                      if ((_commCoach['observations'] as List?)?.isNotEmpty == true)
                         const SizedBox(height: 8),
                       if (_commitments.isNotEmpty)
                         _CommitmentsCard(
@@ -1595,6 +1602,55 @@ class _MediaDiaryCard extends StatelessWidget {
                     size: 20),
                 onPressed: () => onNote(m['id'] as String, m['note'] as String?),
               ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Communication coach (#37): who's waiting on you, who you've gone quiet on, and how your
+/// writing lands — each with a concrete fix. Composes the comm-specific signals.
+class _CommCoachCard extends StatelessWidget {
+  const _CommCoachCard({required this.coach});
+  final Map<String, dynamic> coach;
+
+  static const _icon = {
+    'waiting': Icons.hourglass_bottom,
+    'quiet': Icons.notifications_paused_outlined,
+    'tone': Icons.record_voice_over_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final obs = (coach['observations'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.forum_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Communication coach', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 4),
+          for (final o in obs)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(_icon[o['kind']] ?? Icons.chat_outlined, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${o['text']}', style: Theme.of(context).textTheme.bodyMedium),
+                    if (o['fix'] != null)
+                      Text('${o['fix']}',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.primary)),
+                  ]),
+                ),
+              ]),
             ),
         ]),
       ),

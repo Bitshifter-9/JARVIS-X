@@ -647,6 +647,10 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> places() async =>
       (await _send('GET', '/v1/places') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// Communication coach: who's waiting, gone quiet, your tone — with fixes (#37).
+  Future<Map<String, dynamic>> commCoach() async =>
+      await _send('GET', '/v1/comm-coach') as Map<String, dynamic>;
+
   /// Media diary: what you watched/read, with takeaways (#6).
   Future<List<Map<String, dynamic>>> mediaDiary() async =>
       (await _send('GET', '/v1/media-diary') as List<dynamic>).cast<Map<String, dynamic>>();
