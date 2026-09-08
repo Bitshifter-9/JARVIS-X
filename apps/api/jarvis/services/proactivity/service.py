@@ -104,6 +104,7 @@ async def coming_up(
                 Commitment.status == "open",
                 Commitment.due_at.is_not(None),
                 Commitment.due_at <= horizon,
+                Commitment.task_id.is_(None),  # a task-linked promise shows as its deadline (#44)
             )
         )
     ).all()

@@ -122,3 +122,41 @@ async def test_claim_due_commitments_fires_once(session, user):
     assert len(first) == 1 and first[0].reminded_at is not None
     # Claimed — a second pass won't nudge again.
     assert await claim_due_commitments(session, within_hours=6) == []
+
+
+async def test_dated_commitment_spawns_a_linked_task(session, user):
+    from jarvis.db.models.domain import Task
+
+    conv = Conversation(user_id=user.id, title="chat")
+    session.add(conv)
+    await session.flush()
+    session.add(ChatMessage(user_id=user.id, conversation_id=conv.id, role="user",
+                            content="I'll send the invoice on Friday"))
+    await session.flush()
+
+    caught = await scan_commitments(session, user.id)
+    assert caught == 1
+    c = (await session.scalars(select(Commitment).where(Commitment.user_id == user.id))).one()
+    if c.due_at is not None:  # a date was parsed → a task was spawned and linked (#44)
+        assert c.task_id is not None
+        task = await session.get(Task, c.task_id)
+        assert task is not None and "invoice" in task.title
+
+
+async def test_accountability_checks_in_on_overdue_once(session, user):
+    from datetime import UTC, datetime, timedelta
+
+    from jarvis.services.commitment.service import claim_overdue_commitments
+
+    now = datetime.now(UTC)
+    session.add(Commitment(user_id=user.id, text="I'll file the taxes",
+                           due_at=now - timedelta(days=2), source="chat", dedupe_key="k-tax"))
+    # A not-yet-overdue one is left alone.
+    session.add(Commitment(user_id=user.id, text="I'll call later",
+                           due_at=now + timedelta(days=1), source="chat", dedupe_key="k-call"))
+    await session.flush()
+
+    first = await claim_overdue_commitments(session, grace_hours=6)
+    assert len(first) == 1 and first[0].text == "I'll file the taxes"
+    assert first[0].checked_in_at is not None
+    assert await claim_overdue_commitments(session, grace_hours=6) == []  # only once

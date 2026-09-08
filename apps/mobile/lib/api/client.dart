@@ -534,6 +534,10 @@ class JarvisClient {
   Future<Map<String, dynamic>> selfModel() async =>
       await _send('GET', '/v1/self-model') as Map<String, dynamic>;
 
+  /// Ask your digital twin — "what would I say?" — answered in your voice (#19).
+  Future<Map<String, dynamic>> askTwin(String question) async =>
+      await _send('POST', '/v1/twin', body: {'question': question}) as Map<String, dynamic>;
+
   /// Everything you've copied, newest first, optionally filtered (#7).
   Future<List<Map<String, dynamic>>> clipboardHistory({String? q}) async =>
       (await _send('GET', '/v1/clipboard/history',

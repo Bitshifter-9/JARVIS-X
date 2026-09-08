@@ -91,6 +91,21 @@ async def beat(
         except Exception as exc:  # noqa: BLE001 — a missed nudge is not fatal
             log.warning("commitment_nudge_failed", error=str(exc)[:120])
 
+    # Accountability (#40, opt-in): once a promise is overdue, check in — "did you do it?".
+    if get_settings().accountability_enabled:
+        from jarvis.services.commitment.service import claim_overdue_commitments
+
+        for c in await claim_overdue_commitments(session):
+            try:
+                await NotificationService(session, senders=senders).notify(
+                    c.user_id,
+                    title="Did you do it?",
+                    body=c.text,
+                    data={"kind": "commitment", "id": str(c.id)},
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.warning("accountability_checkin_failed", error=str(exc)[:120])
+
     alerted: list[str] = []
     nudged: list[str] = []
     learned: list[str] = []

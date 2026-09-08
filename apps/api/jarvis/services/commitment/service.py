@@ -86,10 +86,19 @@ async def scan_commitments(session: AsyncSession, user_id: uuid.UUID, *, limit: 
                 due = resolved.due_at if resolved else None
             except Exception:  # noqa: BLE001
                 due = None
-        session.add(
-            Commitment(user_id=user_id, text=sentence[:500], due_at=due,
-                       source="chat", dedupe_key=key)
-        )
+        commitment = Commitment(user_id=user_id, text=sentence[:500], due_at=due,
+                                source="chat", dedupe_key=key)
+        # Auto-task from a dated promise (#44): it enters the reminder machinery with no
+        # typing. The commitment keeps tracking status; coming_up defers to the task.
+        if due is not None:
+            from jarvis.services.goal import GoalService
+
+            task = await GoalService(session).create_task(
+                user_id, title=sentence[:500], due_at=due, timezone=tz,
+                evidence_span=sentence[:500], confidence=0.5,
+            )
+            commitment.task_id = task.id
+        session.add(commitment)
         caught += 1
     await session.flush()
     return caught
@@ -112,11 +121,38 @@ async def claim_due_commitments(
                 Commitment.reminded_at.is_(None),
                 Commitment.due_at.is_not(None),
                 Commitment.due_at <= horizon,
+                Commitment.task_id.is_(None),  # a task-linked one gets its own reminders (#44)
             )
         )
     ).all()
     for c in rows:
         c.reminded_at = now
+    await session.flush()
+    return list(rows)
+
+
+async def claim_overdue_commitments(
+    session: AsyncSession, *, grace_hours: int = 6
+) -> list[Commitment]:
+    """Accountability check-in (#40): open promises now past due (beyond a grace window) that
+    haven't been checked in on — claimed (checked_in_at set) so the caller asks "did you do
+    it?" exactly once."""
+    from datetime import timedelta
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=grace_hours)
+    rows = (
+        await session.scalars(
+            select(Commitment).where(
+                Commitment.status == "open",
+                Commitment.checked_in_at.is_(None),
+                Commitment.due_at.is_not(None),
+                Commitment.due_at < cutoff,
+            )
+        )
+    ).all()
+    for c in rows:
+        c.checked_in_at = now
     await session.flush()
     return list(rows)
 

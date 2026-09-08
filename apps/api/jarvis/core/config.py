@@ -114,6 +114,8 @@ class Settings(BaseSettings):
         default=45, description="Days before an unused episodic memory is forgotten (0=never)"
     )
     slack_scan_enabled: bool = True
+    # Opt-in: check in on a promise once it's overdue ("did you do X?") (#40).
+    accountability_enabled: bool = Field(default=False)
 
     # ── YouTube pipeline ───────────────────────────────────────────────
     # Homebrew's core ffmpeg dropped libass (no burned captions); point this at a

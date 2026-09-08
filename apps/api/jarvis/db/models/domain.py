@@ -176,6 +176,12 @@ class Commitment(UUIDPrimaryKey, Timestamps, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # When an about-to-forget nudge was last sent, so it isn't sent twice (#24).
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The task spawned from a dated promise, so it enters the reminder machinery (#44).
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL")
+    )
+    # When an accountability check-in was sent for an overdue promise, once (#40).
+    checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ReminderMute(UUIDPrimaryKey, Timestamps, Base):

@@ -724,6 +724,18 @@ class _YourData extends ConsumerWidget {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.face_retouching_natural_outlined),
+            title: const Text('Ask my twin'),
+            subtitle: const Text('"What would I say?" — answered in your voice'),
+            onTap: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => const _TwinSheet(),
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.receipt_long_outlined),
             title: const Text('Audit trail'),
             subtitle: const Text('Everything the system did on your account'),
@@ -963,6 +975,94 @@ class _QuietHoursState extends ConsumerState<_QuietHours> {
               child: FilledButton(onPressed: _busy ? null : _save, child: const Text('Save')),
             ),
           ),
+      ]),
+    );
+  }
+}
+
+/// Digital twin (#19): ask "what would I say?" and get an answer in your own voice, grounded
+/// on the self-model JARVIS has learned. Degrades gracefully when there's too little of you.
+class _TwinSheet extends ConsumerStatefulWidget {
+  const _TwinSheet();
+  @override
+  ConsumerState<_TwinSheet> createState() => _TwinSheetState();
+}
+
+class _TwinSheetState extends ConsumerState<_TwinSheet> {
+  final _controller = TextEditingController();
+  bool _busy = false;
+  String? _answer;
+  String? _reason;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ask() async {
+    final q = _controller.text.trim();
+    if (q.length < 3) return;
+    setState(() {
+      _busy = true;
+      _answer = null;
+      _reason = null;
+    });
+    try {
+      final r = await ref.read(clientProvider).askTwin(q);
+      if (mounted) {
+        setState(() {
+          _answer = r['answer'] as String?;
+          _reason = r['reason'] as String?;
+        });
+      }
+    } on ProblemException catch (e) {
+      if (mounted) setState(() => _reason = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 4, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Ask my twin', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text('Answers as you would, from what JARVIS has learned about your voice.',
+            style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+              labelText: 'What would I say if…',
+              hintText: 'Should we launch Friday? · How do I reply to this?'),
+          onSubmitted: (_) => _ask(),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _busy ? null : _ask,
+          icon: _busy
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.auto_awesome),
+          label: Text(_busy ? 'Thinking as you…' : 'Ask'),
+        ),
+        if (_answer != null) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: Theme.of(context).colorScheme.secondaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Text(_answer!, style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          ),
+        ],
+        if (_answer == null && _reason != null) ...[
+          const SizedBox(height: 12),
+          Text(_reason!, style: Theme.of(context).textTheme.bodySmall),
+        ],
       ]),
     );
   }

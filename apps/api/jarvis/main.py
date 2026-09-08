@@ -49,6 +49,7 @@ from jarvis.api.routes import (
     routines,
     runs,
     search,
+    twin,
     webhooks,
     youtube,
 )
@@ -178,6 +179,7 @@ def create_app() -> FastAPI:
     app.include_router(artifacts.router)
     app.include_router(timeline_routes.router)
     app.include_router(tts_routes.router)
+    app.include_router(twin.router)
     app.include_router(hud.router)
     app.include_router(routines.router)
     app.include_router(me.router)

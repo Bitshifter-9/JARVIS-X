@@ -78,6 +78,10 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#31 Habit coach + #27 Rediscover** — the Streaks card now coaches (celebrate a roll,
   smallest next step on a slip); and a "Rediscover" card surfaces an older note relevant to what
   you're doing right now. Both deterministic.
+- ✅ **#19 Digital twin + #44 Auto-tasks + #40 Accountability + #3 usage timeline (audit)** —
+  "Ask my twin" answers as you from the self-model; dated promises auto-spawn tracked tasks;
+  an opt-in check-in nudges overdue promises once; and the Mac/phone usage timeline (macnode
+  `--share-activity` + Android UsageStats) was already feeding the activity stream.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -96,8 +100,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 2. ⬜ **Ambient audio → transcript.** Opt-in, on-device Whisper (already used by
    `macnode voice`); store the *diarised text*, discard the audio within seconds.
    Consent-gated (never record others without a visible indicator).
-3. ⬜ **App & usage timeline, unified.** Extend the Android `UsageStats` sampler to the
-   Mac (foreground app + duration) → one cross-device "where your time went" stream.
+3. ✅ **App & usage timeline, unified.** *Already built:* the Android `UsageStats` sampler **and**
+   `macnode run --share-activity` both post the foreground app + title to `/v1/devices/{id}/activity`
+   (titles only, 30-day retention), one cross-device stream that #36 Focus analytics reads.
 4. ⬜ **Reading & watching log.** Capture what you open (browser history, YouTube,
    articles, PDFs) and auto-summarise the content, not just the URL.
 5. ⬜ **Location trails + place learning.** Significant-location detection (home / work /
@@ -146,8 +151,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 18. ✅ **Private mood/sentiment trend.** From your own messages, a deterministic lexicon score
     by week — a gentle line, never shared, private to your account. Feeds the coach; surfaced in
     the "About you" card.
-19. ⬜ **Digital twin persona.** A persona that answers *as you* (drafting, rehearsing a hard
-    conversation, "what would I say?") — the seed of the future self-model.
+19. ✅ **Digital twin persona.** Answers *as you* — "what would I say?" — grounded on the self-model
+    (your profile, style card, phrasebook and speech pattern) through the free/local cascade,
+    degrading to "not enough of you yet" when signal is thin. `POST /v1/twin`; "Ask my twin" in
+    Settings. The seed of the portable self-model.
 20. ⬜ **Personal LoRA (the actual learning).** Periodically fine-tune a small on-device
     adapter on your corpus (style, facts, preferences) so the local model *is* yours —
     cheap, incremental, offline. This is "improve our model" made literal.
@@ -211,7 +218,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 39. ✅ **Decision journal + outcome review.** Log a decision + your reasoning + what you expect;
     weeks later, when its review date arrives, JARVIS asks "did it work?" (worked / mixed / didn't)
     — so you learn to decide better. A "Decisions" card on Insights with a log sheet.
-40. ⬜ **Accountability mode.** Opt-in check-ins that hold you to the commitments in #22.
+40. ✅ **Accountability mode.** Opt-in (`accountability_enabled`, a Settings toggle): once a promise
+    from #22 is overdue past a grace window, the heartbeat checks in once — "did you do it?".
+    Deterministic, gated, and never twice for the same promise.
 
 ## E. Full automation — hands-free on mobile + Mac
 
@@ -224,7 +233,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     queued for a single tap. *Shipped:* triage drafts the reply in your `learned_style` as a Gmail
     draft **and** queues the `gmail.send` as an approval — the one-tap send is approving it in the
     Approvals screen. A dedicated "pre-written replies" queue is the remaining polish.
-44. ⬜ **Auto-tasks from commitments.** Captured promises become tracked tasks with no typing.
+44. ✅ **Auto-tasks from commitments.** A dated promise caught by #22 now spawns a linked task with no
+    typing, so it enters the deadline/reminder machinery; "Coming up" defers to the task to avoid
+    double-surfacing. Deterministic.
 45. ⬜ **Overnight agent.** Within standing permissions, it tidies, follows up, and prepares
     while you sleep; every effectful step still auditable.
 46. ⬜ **True cross-device continuity.** Start on the Mac, finish on the phone, seamlessly —
