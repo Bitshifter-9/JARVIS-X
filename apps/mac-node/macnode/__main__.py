@@ -136,6 +136,7 @@ def run(args: argparse.Namespace) -> int:
             api_http_url=api,
             share_activity=bool(getattr(args, "share_activity", False)),
             share_screen=bool(getattr(args, "share_screen", False)),
+            share_reading=bool(getattr(args, "share_reading", False)),
         )
     )
     print(f"Connecting as device {config['device_id']}… Ctrl-C to stop.")
@@ -207,6 +208,12 @@ def main() -> int:
         action="store_true",
         help="screen memory (#1): OCR the active window on-device every 90 s and post only "
         "the text — never a pixel (needs Screen Recording permission, 30 days)",
+    )
+    run_cmd.add_argument(
+        "--share-reading",
+        action="store_true",
+        help="reading log (#4): post the front browser tab (Safari/Chrome) every 45 s — "
+        "url + title, searchable, 30 days",
     )
     run_cmd.add_argument("--api")
     run_cmd.add_argument("--email")

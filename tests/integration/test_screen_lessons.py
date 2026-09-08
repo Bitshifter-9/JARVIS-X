@@ -70,3 +70,33 @@ async def test_screen_ingest_is_searchable(client, session):
 
     found = (await client.get("/v1/search?q=nginx", headers=auth)).json()["results"]
     assert any("Kubernetes" in (r.get("title") or "") for r in found)
+
+
+async def test_reading_log_is_searchable(client, session):
+    import uuid
+    from datetime import UTC, datetime
+
+    from jarvis.db.models.identity import User
+    from jarvis.db.models.ops import Device
+    from jarvis.db.session import get_sessionmaker
+    from sqlalchemy import select
+
+    await IdentityService(session).register("rd@example.com", PASSWORD)
+    await session.commit()
+    r = await client.post("/v1/auth/login", json={"email": "rd@example.com", "password": PASSWORD})
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    async with get_sessionmaker()() as s:
+        uid = (await s.scalars(select(User.id).where(User.email == "rd@example.com"))).one()
+        dev = Device(user_id=uid, name="Mac", platform="macos", public_key_pem="-",
+                     fingerprint=uuid.uuid4().hex, paired_at=datetime.now(UTC))
+        s.add(dev)
+        await s.commit()
+        did = str(dev.id)
+
+    body = [{"url": "https://youtube.com/watch?v=abc",
+             "title": "GraphRAG explained", "kind": "video"}]
+    posted = (await client.post(f"/v1/devices/{did}/reading", headers=auth, json=body)).json()
+    assert posted["stored"] == 1
+    found = (await client.get("/v1/search?q=GraphRAG", headers=auth)).json()["results"]
+    assert any("GraphRAG" in (r.get("title") or "") for r in found)

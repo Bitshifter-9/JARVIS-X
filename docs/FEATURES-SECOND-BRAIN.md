@@ -85,6 +85,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#35 Micro-lessons + #1 Screen memory** — tap a knowledge-gap chip for a 3-minute lesson;
   and `macnode --share-screen` OCRs the active window on-device (Vision), storing only the text
   as a life-searchable `screen` source (verify capture on your Mac). #46 cross-device already true.
+- ✅ **#4 Reading/watching log** — `macnode --share-reading` logs the front browser tab (url +
+  title) as a life-searchable `reading` source; the counterpart to screen memory for the web.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -108,8 +110,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
 3. ✅ **App & usage timeline, unified.** *Already built:* the Android `UsageStats` sampler **and**
    `macnode run --share-activity` both post the foreground app + title to `/v1/devices/{id}/activity`
    (titles only, 30-day retention), one cross-device stream that #36 Focus analytics reads.
-4. ⬜ **Reading & watching log.** Capture what you open (browser history, YouTube,
-   articles, PDFs) and auto-summarise the content, not just the URL.
+4. ✅ **Reading & watching log.** `macnode run --share-reading` posts the front browser tab
+   (Safari/Chrome — url + title, video/article/pdf) to `/v1/devices/{id}/reading` every 45 s, a
+   life-searchable `reading` source (30 days, one row per url per hour) that feeds interest-drift
+   (#17). (Auto-summarising the content is the later on-device step; verify capture on your Mac.)
 5. ⬜ **Location trails + place learning.** Significant-location detection (home / work /
    gym / a friend's) from the phone's coarse location, as context, not a map.
 6. ⬜ **Media diary.** What you watched/listened to, with a one-line "why it mattered / what

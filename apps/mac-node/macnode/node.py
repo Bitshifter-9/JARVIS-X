@@ -24,6 +24,7 @@ log = get_logger(__name__)
 
 ACTIVITY_SAMPLE_SECONDS = 30
 SCREEN_SAMPLE_SECONDS = 90  # screen memory (#1): OCR the active window every 90 s
+READING_SAMPLE_SECONDS = 45  # reading log (#4): log the front browser tab every 45 s
 HEARTBEAT_SECONDS = 30
 BACKOFF_CAP_SECONDS = 60.0
 
@@ -45,6 +46,9 @@ class NodeConfig:
     # Screen memory (#1): OCR the active window on-device and post only the *text* (never a
     # pixel). Off by default; `--share-screen` turns it on. Needs Screen Recording permission.
     share_screen: bool = False
+    # Reading log (#4): post the front browser tab (url + title). Off by default;
+    # `--share-reading` turns it on. Safari/Chrome, via AppleScript.
+    share_reading: bool = False
 
 
 def make_uploader(api_http_url: str, access_token: str, device_id: str):  # noqa: ANN201
@@ -126,12 +130,15 @@ class MacNode:
             screen = (
                 asyncio.create_task(self._sample_screen()) if self.config.share_screen else None
             )
+            reading = (
+                asyncio.create_task(self._sample_reading()) if self.config.share_reading else None
+            )
             try:
                 async for raw in socket:
                     await self._on_message(socket, json.loads(raw))
             finally:
                 heartbeat.cancel()
-                for task in (sampler, screen):
+                for task in (sampler, screen, reading):
                     if task is not None:
                         task.cancel()
 
@@ -212,6 +219,41 @@ class MacNode:
                 )
             except Exception as exc:  # noqa: BLE001 — keep sampling; try again next tick
                 log.debug("screen_sample_failed", error=str(exc)[:80])
+
+    async def _sample_reading(self) -> None:
+        """Reading log (#4): every 45 s, post the front browser tab (url + title) — what you
+        read and watch, so it becomes searchable and feeds interest-drift. A tab left open is
+        logged at most once (last_url guard; the server also buckets by the hour)."""
+        import httpx
+
+        last_url: str | None = None
+        while True:
+            await asyncio.sleep(READING_SAMPLE_SECONDS)
+            if not self.config.api_http_url:
+                continue
+            try:
+                tab = self.adapter.browser_tab()
+                if tab is None:
+                    continue
+                url, title = tab
+                if url == last_url:
+                    continue
+                last_url = url
+                kind = (
+                    "video" if ("youtube.com" in url or "youtu.be" in url)
+                    else "pdf" if url.lower().endswith(".pdf")
+                    else "article"
+                )
+                await asyncio.to_thread(
+                    httpx.post,
+                    f"{self.config.api_http_url}/v1/devices/{self.config.device_id}/reading",
+                    headers={"Authorization": f"Bearer {self.config.access_token}"},
+                    json=[{"url": url, "title": title, "kind": kind,
+                           "at": datetime.now(UTC).isoformat()}],
+                    timeout=20,
+                )
+            except Exception as exc:  # noqa: BLE001 — keep sampling; try again next tick
+                log.debug("reading_sample_failed", error=str(exc)[:80])
 
     async def _on_message(self, socket, message: dict[str, Any]) -> None:  # noqa: ANN001
         kind = message.get("type")

@@ -492,6 +492,68 @@ class ScreenIn(BaseModel):
     at: str | None = None
 
 
+class ReadingIn(BaseModel):
+    url: str = Field(max_length=2000)
+    title: str | None = Field(default=None, max_length=400)
+    kind: str = Field(default="article", max_length=16)  # article | video | pdf | page
+    text: str | None = Field(default=None, max_length=8000)  # extracted content, optional
+    at: str | None = None
+
+
+@router.post("/{device_id}/reading", status_code=202)
+async def post_reading(
+    device_id: uuid.UUID, body: list[ReadingIn], user: CurrentUser, session: SessionDep
+) -> dict[str, Any]:
+    """Reading & watching log (#4): a paired device reports what you opened (article, video,
+    PDF) — URL + title (+ extracted text where available) — stored as a life-searchable
+    ``reading`` source, opt-in, 30-day retention. Feeds interest-drift (#17)."""
+    import hashlib
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from jarvis.core.errors import Forbidden
+    from jarvis.core.ids import uuid7
+    from jarvis.db.models.source import SourceObject
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+
+    now = datetime.now(UTC)
+    retention = now + timedelta(days=30)
+    rows = []
+    seen: set[str] = set()
+    for r in body[:120]:
+        url = (r.url or "").strip()
+        if not url:
+            continue
+        try:
+            at = datetime.fromisoformat(r.at) if r.at else now
+        except ValueError:
+            at = now
+        # One row per URL per hour, so a tab you leave open isn't logged endlessly.
+        bucket = at.strftime("%Y%m%d%H")
+        oid = f"{hashlib.sha256(url.encode()).hexdigest()[:16]}:{bucket}"
+        if oid in seen:
+            continue
+        seen.add(oid)
+        rows.append({
+            "id": uuid7(), "user_id": user.id, "provider": "reading",
+            "object_id": oid, "kind": r.kind[:16] or "article",
+            "title": (r.title or url)[:400],
+            "excerpt": (r.text or r.title or url)[:8000], "url": url[:2000],
+            "occurred_at": at, "retention_until": retention,
+        })
+    if rows:
+        stmt = pg_insert(SourceObject).values(rows).on_conflict_do_nothing(
+            index_elements=["provider", "account_id", "object_id"]
+        )
+        await session.execute(stmt)
+        await session.flush()
+    return {"stored": len(rows)}
+
+
 @router.post("/{device_id}/screen", status_code=202)
 async def post_screen(
     device_id: uuid.UUID, body: list[ScreenIn], user: CurrentUser, session: SessionDep

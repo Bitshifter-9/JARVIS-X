@@ -80,6 +80,7 @@ class MacAdapter(Protocol):
     def key_press(self, key: str, modifiers: list[str]) -> bool: ...
     def capture_screen(self) -> CaptureResult | None: ...
     def ocr_image(self, path: str) -> str: ...
+    def browser_tab(self) -> tuple[str, str] | None: ...
     def clipboard_read(self) -> str: ...
     def clipboard_write(self, text: str) -> bool: ...
     def notify(self, title: str, body: str) -> bool: ...
@@ -440,6 +441,26 @@ class PyObjCAdapter:
         except Exception:  # noqa: BLE001 — no Vision, no OCR; the loop just skips
             return ""
 
+    def browser_tab(self) -> tuple[str, str] | None:
+        """The front browser's active tab as (url, title), via AppleScript — reading log #4.
+        Only Safari and Chrome; None otherwise or on any failure."""
+        scripts = {
+            "com.apple.Safari": 'tell application "Safari" to return (URL of current tab of '
+            'front window) & linefeed & (name of current tab of front window)',
+            "com.google.Chrome": 'tell application "Google Chrome" to return (URL of active tab '
+            'of front window) & linefeed & (title of active tab of front window)',
+        }
+        script = scripts.get(self.frontmost_window().frontmost_bundle_id or "")
+        if not script:
+            return None
+        code, out = self.run_argv(["/usr/bin/osascript", "-e", script], timeout=5)
+        if code != 0 or not out.strip():
+            return None
+        parts = out.strip().split("\n", 1)
+        url = parts[0].strip()
+        title = parts[1].strip() if len(parts) > 1 else ""
+        return (url, title) if url.startswith("http") else None
+
     def clipboard_read(self) -> str:
         _, output = self.run_argv(["/usr/bin/pbpaste"], timeout=5)
         return output
@@ -638,6 +659,7 @@ class FakeMacAdapter:
     pressed: list[tuple[str, str]] = field(default_factory=list)
     capture: CaptureResult | None = None
     ocr_text: str = ""
+    browser_tab_value: tuple[str, str] | None = None
     scoped_files: set[str] = field(default_factory=set)
     # Set when an app can be launched but refuses to come forward — the exact condition
     # the repair graph exists to handle.
@@ -742,6 +764,9 @@ class FakeMacAdapter:
 
     def ocr_image(self, path: str) -> str:
         return self.ocr_text
+
+    def browser_tab(self) -> tuple[str, str] | None:
+        return self.browser_tab_value
 
     def clipboard_read(self) -> str:
         return self.clipboard
