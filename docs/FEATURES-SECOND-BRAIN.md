@@ -89,6 +89,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   title) as a life-searchable `reading` source; the counterpart to screen memory for the web.
 - ✅ **#5 Location trails + place learning** — a "Places" card labels home/work/frequent from
   coarse fixes (rounded to ~500 m server-side; context, not a map). Deterministic clustering.
+- ✅ **#6 Media diary** — the reading/watching log becomes an annotatable diary: add "why it
+  mattered" to what you watched/read and it turns into searchable knowledge.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -120,8 +122,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
    then clustered and labelled by when you're there — home (nights), work (weekday days), or a
    frequent place. Context, never a map; 30-day retention, auto-pruned. A "Places" card on Insights
    with an explicit "Add current location" (continuous background capture via the FGS is next).
-6. ⬜ **Media diary.** What you watched/listened to, with a one-line "why it mattered / what
-   you took from it," so consumption becomes recall-able knowledge.
+6. ✅ **Media diary.** What you watched and read (from the reading log #4), each with a one-line
+   "why it mattered" you attach — and the takeaway folds into the searchable text, so consumption
+   becomes recall-able knowledge. A "Media diary" card on Insights. `GET /v1/media-diary` + note.
 7. ✅ **Clipboard history.** A searchable timeline of everything you copied, kept on the synced
    clipboard (capped, newest-first, tap to re-copy). A "History" view on the Devices clipboard card.
 8. ⬜ **Photo & screenshot semantic index.** On-device caption + OCR every image once, store

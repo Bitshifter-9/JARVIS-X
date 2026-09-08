@@ -39,6 +39,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _decisionsDue = const [];
   Map<String, dynamic> _focus = const {};
   List<Map<String, dynamic>> _places = const [];
+  List<Map<String, dynamic>> _media = const [];
   Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -82,6 +83,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.focusAnalytics(),
         client.rediscover(),
         client.places(),
+        client.mediaDiary(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -108,6 +110,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _focus = results[20] as Map<String, dynamic>;
         _rediscover = results[21] as Map<String, dynamic>;
         _places = results[22] as List<Map<String, dynamic>>;
+        _media = results[23] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -162,6 +165,36 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Location added (rounded to ~500 m). Places emerge over time.')));
       }
+      await _load();
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _addMediaNote(String sourceId, String? existing) async {
+    final controller = TextEditingController(text: existing ?? '');
+    final note = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Why it mattered'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'One line — what you took from it'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (note == null || note.isEmpty) return;
+    try {
+      await ref.read(clientProvider).setMediaNote(sourceId, note);
       await _load();
     } on ProblemException catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -328,6 +361,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       const SizedBox(height: 8),
                       _PlacesCard(places: _places, onAdd: _addLocation),
                       const SizedBox(height: 8),
+                      if (_media.isNotEmpty)
+                        _MediaDiaryCard(items: _media, onNote: _addMediaNote),
+                      if (_media.isNotEmpty) const SizedBox(height: 8),
                       _SpendingCard(spending: _spending),
                       const SizedBox(height: 8),
                       if (_travel.isNotEmpty) _TravelCard(trips: _travel),
@@ -1512,6 +1548,54 @@ class _PlacesCard extends StatelessWidget {
                 trailing: Text('${((p['share'] as num) * 100).round()}% of the time',
                     style: Theme.of(context).textTheme.labelSmall),
               ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Media diary (#6): what you watched and read (from the reading log), with a one-line "why
+/// it mattered" you attach — so consumption becomes recall-able knowledge. Tap to annotate.
+class _MediaDiaryCard extends StatelessWidget {
+  const _MediaDiaryCard({required this.items, required this.onNote});
+  final List<Map<String, dynamic>> items;
+  final void Function(String sourceId, String? existing) onNote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.subscriptions_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Media diary', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 2),
+          Text('What you watched and read — add a takeaway to keep it.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          for (final m in items.take(8))
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(m['kind'] == 'video' ? Icons.play_circle_outline
+                  : m['kind'] == 'pdf' ? Icons.picture_as_pdf_outlined
+                  : Icons.article_outlined, size: 20),
+              title: Text('${m['title'] ?? m['url'] ?? ''}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: m['note'] != null
+                  ? Text('“${m['note']}”', maxLines: 2, overflow: TextOverflow.ellipsis)
+                  : null,
+              trailing: IconButton(
+                tooltip: m['note'] != null ? 'Edit takeaway' : 'Add takeaway',
+                icon: Icon(m['note'] != null ? Icons.edit_note : Icons.add_comment_outlined,
+                    size: 20),
+                onPressed: () => onNote(m['id'] as String, m['note'] as String?),
+              ),
+            ),
         ]),
       ),
     );

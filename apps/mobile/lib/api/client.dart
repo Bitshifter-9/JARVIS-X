@@ -647,6 +647,13 @@ class JarvisClient {
   Future<List<Map<String, dynamic>>> places() async =>
       (await _send('GET', '/v1/places') as List<dynamic>).cast<Map<String, dynamic>>();
 
+  /// Media diary: what you watched/read, with takeaways (#6).
+  Future<List<Map<String, dynamic>>> mediaDiary() async =>
+      (await _send('GET', '/v1/media-diary') as List<dynamic>).cast<Map<String, dynamic>>();
+
+  Future<void> setMediaNote(String sourceId, String note) async =>
+      _send('POST', '/v1/media-diary/$sourceId/note', body: {'note': note});
+
   /// Report coarse location fixes for place learning (#5) — the server rounds to ~500 m.
   Future<void> postLocation(String deviceId, List<Map<String, dynamic>> fixes) async =>
       _send('POST', '/v1/devices/$deviceId/location', body: fixes);

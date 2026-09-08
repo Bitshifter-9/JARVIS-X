@@ -34,6 +34,7 @@ from jarvis.api.routes import (
     interests,
     internal,
     me,
+    media_diary,
     memories,
     metrics,
     micro_lessons,
@@ -186,6 +187,7 @@ def create_app() -> FastAPI:
     app.include_router(hud.router)
     app.include_router(routines.router)
     app.include_router(me.router)
+    app.include_router(media_diary.router)
     app.include_router(personas.router)
     app.include_router(places.router)
     app.include_router(insights.router)
