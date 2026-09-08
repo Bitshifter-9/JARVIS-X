@@ -96,6 +96,8 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
   tasks. Backend tested; Mac capture compile-checked (verify on your Mac).
 - ✅ **#45 Overnight agent** — an opt-in nightly sweep prepares while you sleep (promises,
   insights, tomorrow's brief) and reports it in the morning; only safe, auditable prep.
+- ✅ **#20 Personal LoRA** — a Mac (mlx-lm) fine-tune script trains a personal adapter on your own
+  corpus, so the local model becomes yours; runs and stays entirely on your Mac.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -178,9 +180,12 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     (your profile, style card, phrasebook and speech pattern) through the free/local cascade,
     degrading to "not enough of you yet" when signal is thin. `POST /v1/twin`; "Ask my twin" in
     Settings. The seed of the portable self-model.
-20. ⬜ **Personal LoRA (the actual learning).** Periodically fine-tune a small on-device
-    adapter on your corpus (style, facts, preferences) so the local model *is* yours —
-    cheap, incremental, offline. This is "improve our model" made literal.
+20. ✅ **Personal LoRA (the actual learning).** `scripts/train_self_model.py` runs on your Apple-
+    Silicon Mac (mlx-lm): it pulls *your* corpus (your messages + learned facts + persona) from your
+    account, builds a training set, and fine-tunes a LoRA adapter so the local model's voice and
+    facts are yours — cheap, incremental, offline. The model and adapter never leave the Mac.
+    (Written + compile-checked; run it on your Mac: `pip install mlx-lm`, then `uv run python -m
+    scripts.train_self_model --api … --email …`.)
 
 ## C. Recall & anti-forgetting — the second-brain core
 
