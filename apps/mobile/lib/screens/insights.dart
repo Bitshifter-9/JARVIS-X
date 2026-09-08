@@ -36,6 +36,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   Map<String, dynamic> _speech = const {};
   List<Map<String, dynamic>> _gaps = const [];
   List<Map<String, dynamic>> _decisionsDue = const [];
+  Map<String, dynamic> _focus = const {};
+  Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
   bool _scanning = false;
@@ -59,7 +61,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.travel(),
         client.insightLabels(),
         client.awayDigest(),
-        client.streaks(),
+        client.coach(),
         client.meetingPrep(),
         client.groupedActivity(),
         client.anomalies(),
@@ -75,6 +77,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.speechProfile(),
         client.knowledgeGaps(),
         client.decisionsDue(),
+        client.focusAnalytics(),
+        client.rediscover(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -98,6 +102,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _speech = results[17] as Map<String, dynamic>;
         _gaps = results[18] as List<Map<String, dynamic>>;
         _decisionsDue = results[19] as List<Map<String, dynamic>>;
+        _focus = results[20] as Map<String, dynamic>;
+        _rediscover = results[21] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -126,6 +132,34 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     }
   }
 
+  Future<void> _timeTravel() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 1)),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now(),
+      helpText: 'Look back at a day',
+    );
+    if (picked == null || !mounted) return;
+    final iso = '${picked.year.toString().padLeft(4, '0')}-'
+        '${picked.month.toString().padLeft(2, '0')}-'
+        '${picked.day.toString().padLeft(2, '0')}';
+    Map<String, dynamic> recon = const {};
+    try {
+      recon = await ref.read(clientProvider).timetravel(iso);
+    } on ProblemException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      return;
+    }
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _DayReconstruction(recon: recon),
+    );
+  }
+
   Future<void> _showLogDecision(BuildContext context) async {
     final logged = await showModalBottomSheet<bool>(
       context: context,
@@ -152,6 +186,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         title: const Text('Insights'),
         actions: [
           IconButton(
+            tooltip: 'Look back at a day',
+            icon: const Icon(Icons.history),
+            onPressed: _timeTravel,
+          ),
+          IconButton(
             tooltip: 'Scan mail now',
             icon: _scanning
                 ? const SizedBox(
@@ -176,6 +215,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_owed.isNotEmpty) const SizedBox(height: 8),
                       if (_resurface.isNotEmpty) _ResurfaceCard(items: _resurface),
                       if (_resurface.isNotEmpty) const SizedBox(height: 8),
+                      if (_rediscover['content'] != null) _RediscoverCard(item: _rediscover),
+                      if (_rediscover['content'] != null) const SizedBox(height: 8),
                       if (_people.any((p) => p['quiet'] == true))
                         _PeopleCard(people: _people),
                       if (_people.any((p) => p['quiet'] == true))
@@ -223,6 +264,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
                       if (_rhythm['enough_data'] == true) const SizedBox(height: 8),
                       if (_rhythm['enough_data'] == true) _RhythmCard(rhythm: _rhythm),
+                      if (_focus['enough_data'] == true) const SizedBox(height: 8),
+                      if (_focus['enough_data'] == true) _FocusCard(focus: _focus),
                       if (_hasAboutYou) const SizedBox(height: 8),
                       if (_hasAboutYou)
                         _AboutYouCard(mood: _mood, speech: _speech, gaps: _gaps),
@@ -445,6 +488,12 @@ class _StreaksCard extends StatelessWidget {
             Expanded(child: _streak(context, '🔥', 'Focus days', focus)),
             Expanded(child: _streak(context, '✅', 'Done days', done)),
           ]),
+          for (final m in [focus['message'], done['message']])
+            if (m != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('$m', style: Theme.of(context).textTheme.bodySmall),
+              ),
         ]),
       ),
     );
@@ -1177,6 +1226,161 @@ class _LogDecisionSheetState extends ConsumerState<_LogDecisionSheet> {
           label: Text(_saving ? 'Saving…' : 'Log decision'),
         ),
       ]),
+    );
+  }
+}
+
+
+/// Focus analytics (#36): deep-work vs distraction minutes, the apps that pull you away, and
+/// your best focus window — over the activity samples a device collected. Only shown when a
+/// device is sampling.
+class _FocusCard extends StatelessWidget {
+  const _FocusCard({required this.focus});
+  final Map<String, dynamic> focus;
+
+  static String _mins(num m) => m >= 60 ? '${(m / 60).toStringAsFixed(1)}h' : '${m.round()}m';
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final distractions =
+        (focus['distractions'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final w = focus['best_window'] as Map<String, dynamic>?;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.center_focus_strong_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Focus (${focus['days']}d)', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_mins(focus['deep_minutes'] as num? ?? 0),
+                    style: Theme.of(context).textTheme.headlineSmall),
+                Text('deep work', style: Theme.of(context).textTheme.labelSmall),
+              ]),
+            ),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_mins(focus['distraction_minutes'] as num? ?? 0),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: scheme.error)),
+                Text('distracted', style: Theme.of(context).textTheme.labelSmall),
+              ]),
+            ),
+          ]),
+          if (distractions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Pulls you away: ${distractions.map((d) => d['app']).take(3).join(', ')}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+          if (w != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Best focus window earlier today shows in Your rhythm.',
+                  style: Theme.of(context).textTheme.labelSmall),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Time-travel (#30): a past day rebuilt from what touched it — tasks done, deadlines, mail,
+/// notes, and the apps you spent time in.
+class _DayReconstruction extends StatelessWidget {
+  const _DayReconstruction({required this.recon});
+  final Map<String, dynamic> recon;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = (recon['done'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final deadlines =
+        (recon['deadlines'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final messages = (recon['messages'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final notes = (recon['notes'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+    final apps = (recon['apps'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+
+    Widget section(String title, IconData icon, List<Widget> rows) => rows.isEmpty
+        ? const SizedBox.shrink()
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const SizedBox(height: 12),
+            Row(children: [
+              Icon(icon, size: 16),
+              const SizedBox(width: 8),
+              Text(title, style: Theme.of(context).textTheme.labelLarge),
+            ]),
+            const SizedBox(height: 4),
+            ...rows,
+          ]);
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      builder: (context, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        children: [
+          Text(recon['date'] as String? ?? 'That day',
+              style: Theme.of(context).textTheme.titleLarge),
+          if (recon['empty'] == true)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text("Nothing captured that day.",
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
+          section('Finished', Icons.check_circle_outline,
+              [for (final t in done) Text('• ${t['title']}')]),
+          section('Due', Icons.event_outlined,
+              [for (final t in deadlines) Text('• ${t['title']}')]),
+          section('Messages', Icons.mail_outline, [
+            for (final m in messages)
+              Text('• ${m['from'] ?? ''}: ${m['subject'] ?? ''}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+          section('Notes', Icons.sticky_note_2_outlined, [
+            for (final n in notes)
+              Text('• ${n['content']}', maxLines: 2, overflow: TextOverflow.ellipsis),
+          ]),
+          section('Time in apps', Icons.apps, [
+            for (final a in apps) Text('• ${a['app']} — ${a['minutes']}m'),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Rediscover (#27): an old idea or note relevant to what you're doing right now —
+/// serendipity on purpose.
+class _RediscoverCard extends StatelessWidget {
+  const _RediscoverCard({required this.item});
+  final Map<String, dynamic> item;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.travel_explore_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Rediscover', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 6),
+          Text('${item['content']}', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 6),
+          Text('From ${item['age_days']} days ago · because you mentioned "${item['because']}"',
+              style: Theme.of(context).textTheme.labelSmall),
+        ]),
+      ),
     );
   }
 }

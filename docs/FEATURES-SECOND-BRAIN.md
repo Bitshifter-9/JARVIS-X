@@ -72,6 +72,12 @@ regex, a **local** embedder (server CPU, no API), and plain Postgres, no new clo
 - ✅ **#50 Self-model export** — a portable, versioned bundle of everything learned about you
   (persona, style, phrasebook, speech, rhythm, relationships, knowledge, promises, decisions),
   exported from Settings. The roadmap's capstone — the seed of "a robot of myself."
+- ✅ **#30 Time-travel + #36 Focus analytics** — reconstruct any past day (tasks, mail, notes,
+  apps) from a date-picker on Insights; and a "Focus" card with deep-work vs distraction minutes
+  and the apps that pull you away (over the opt-in activity samples). Deterministic.
+- ✅ **#31 Habit coach + #27 Rediscover** — the Streaks card now coaches (celebrate a roll,
+  smallest next step on a slip); and a "Rediscover" card surfaces an older note relevant to what
+  you're doing right now. Both deterministic.
 - **Audit:** several items were already built and are now marked accurately — #32 weekly review,
   #33 behaviour/anomaly nudges, #34 goal-progress prediction (✅); #42 auto-triage, #47 hands-free
   voice, #49 smart-notification layer (🚧, core shipped, one piece each remaining).
@@ -167,20 +173,23 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     replies owed, and who you've gone quiet on. Deterministic, no model; tap a row to jump there.
 26. ✅ **One search box over your whole life.** Mail, chats, screens, notes, media — one
     semantic search, ranked, with time and source.
-27. ⬜ **Rediscover.** Surfaces an old idea/note relevant to what you're doing *right now* —
-    serendipity on purpose.
+27. ✅ **Rediscover.** Surfaces an old idea/note relevant to what you're doing *right now* —
+    from your current focus (the last thing you told JARVIS, or your top open task) it finds an
+    older memory that matches and brings one back. A "Rediscover" card on Insights. Deterministic.
 28. ✅ **Dropped-thread finder.** People who asked you something a few hours ago you may not
     have answered — read off the triage ``needs_reply`` classifications, one row per sender,
     muted senders excluded. An "Owe a reply?" card on Insights.
 29. ✅ **Knowledge-gap detector.** Topics you keep asking about — the recurring subjects of your
     own questions — surfaced as likely gaps worth a micro-lesson (deterministic, no model).
-30. ⬜ **Time-travel reconstruction.** "What was I working on last Tuesday?" — a rebuilt day
-    from the capture streams.
+30. ✅ **Time-travel reconstruction.** "What was I working on last Tuesday?" — a day rebuilt from
+    everything that touched it: tasks finished, deadlines, mail/messages, notes, and the apps you
+    spent time in. A date-picker in the Insights app bar opens the reconstruction. Deterministic.
 
 ## D. Self-improvement — the coach
 
-31. ⬜ **Habit coach.** Beyond streaks (shipped): forming new habits, smallest-next-step when
-    you're slipping, celebrating when you're on a roll.
+31. ✅ **Habit coach.** Beyond the streak number: celebrates a roll, and offers the smallest next
+    step when one has slipped ("you had a 5-day streak — one session restarts it"). Kind, never
+    naggy, reads the streaks already computed. Shown on the Streaks card. Deterministic.
 32. ✅ **Auto weekly self-review.** Wins, slips, one pattern, one focus for next week.
     *Already shipped:* `GET /v1/review/weekly` rolls up the past 7 days — done, slipped, focus
     minutes, where the time went, and what's due next week.
@@ -192,7 +201,9 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     probability, critical path, and the fixes that would change the outcome.
 35. ⬜ **Personalised micro-lessons.** "How to improve X" turned into 3-minute lessons from
     *your* gaps, delivered on a spaced schedule.
-36. ⬜ **Focus analytics.** Deep-work time, top distraction sources ranked, best focus window.
+36. ✅ **Focus analytics.** Deep-work vs distraction minutes, the apps that pull you away (ranked),
+    and your best focus window — over the activity samples a device collected. A "Focus" card on
+    Insights (empty until a device is sampling). Deterministic, no model.
 37. ⬜ **Communication coach.** Your reply latency, tone drift, who you ghost — with concrete
     fixes.
 38. ⬜ **Energy/health correlation.** If you connect sleep/steps, correlate them with your
@@ -209,8 +220,10 @@ deferred until the data volume makes them worth the complexity (the roadmap's ow
     *you* surface. *Shipped for mail:* triage classifies every message (needs_reply / fyi /
     deadline / spam / newsletter) and drafts the reply that's owed. Unifying messages and phone
     notifications into the same triage is the remaining piece.
-43. ⬜ **Draft-in-your-voice, one-tap send.** Replies pre-written in your style (§B #11),
-    queued for a single tap.
+43. 🚧 **Draft-in-your-voice, one-tap send.** Replies pre-written in your style (§B #11),
+    queued for a single tap. *Shipped:* triage drafts the reply in your `learned_style` as a Gmail
+    draft **and** queues the `gmail.send` as an approval — the one-tap send is approving it in the
+    Approvals screen. A dedicated "pre-written replies" queue is the remaining polish.
 44. ⬜ **Auto-tasks from commitments.** Captured promises become tracked tasks with no typing.
 45. ⬜ **Overnight agent.** Within standing permissions, it tidies, follows up, and prepares
     while you sleep; every effectful step still auditable.

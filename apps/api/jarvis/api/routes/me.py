@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -107,6 +107,26 @@ async def mood(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     from jarvis.services.mood import mood_trend
 
     return await mood_trend(session, user.id)
+
+
+@router.get("/focus-analytics")
+async def focus_analytics_route(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Deep-work time, the apps that pull you away, and your best focus window (#36)."""
+    from jarvis.services.focus_analytics import focus_analytics
+
+    tz = user.timezone or get_settings().timezone
+    return await focus_analytics(session, user.id, tz=tz)
+
+
+@router.get("/timetravel")
+async def timetravel(
+    user: CurrentUser, session: SessionDep, day: date
+) -> dict[str, Any]:
+    """Reconstruct a past day from everything captured that day (#30). day = YYYY-MM-DD."""
+    from jarvis.services.timetravel import reconstruct_day
+
+    tz = user.timezone or get_settings().timezone
+    return await reconstruct_day(session, user.id, day, tz=tz)
 
 
 @router.get("/rhythm")

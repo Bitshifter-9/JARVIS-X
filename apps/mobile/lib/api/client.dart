@@ -635,6 +635,14 @@ class JarvisClient {
   Future<Map<String, dynamic>> rhythm() async =>
       await _send('GET', '/v1/rhythm') as Map<String, dynamic>;
 
+  /// Focus analytics: deep-work minutes, distraction sources, best window (#36).
+  Future<Map<String, dynamic>> focusAnalytics() async =>
+      await _send('GET', '/v1/focus-analytics') as Map<String, dynamic>;
+
+  /// Time-travel: reconstruct a past day (#30). date = YYYY-MM-DD.
+  Future<Map<String, dynamic>> timetravel(String date) async =>
+      await _send('GET', '/v1/timetravel', query: {'day': date}) as Map<String, dynamic>;
+
   // ── decision journal (second-brain #39) ───────────────────────────
   Future<Map<String, dynamic>> logDecision(String text,
           {String? reasoning, String? expected, int reviewInDays = 30}) async =>
@@ -709,6 +717,14 @@ class JarvisClient {
   // ── proactivity: streaks and meeting prep ─────────────────────────
   Future<Map<String, dynamic>> streaks() async =>
       await _send('GET', '/v1/proactivity/streaks') as Map<String, dynamic>;
+
+  /// Habit coach: streaks + a kind next-step / celebration line (#31).
+  Future<Map<String, dynamic>> coach() async =>
+      await _send('GET', '/v1/proactivity/coach') as Map<String, dynamic>;
+
+  /// Rediscover: an old note relevant to what you're doing now (#27).
+  Future<Map<String, dynamic>> rediscover() async =>
+      await _send('GET', '/v1/rediscover') as Map<String, dynamic>;
 
   Future<Map<String, dynamic>?> meetingPrep() async =>
       await _send('GET', '/v1/proactivity/meeting') as Map<String, dynamic>?;

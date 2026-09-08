@@ -10,6 +10,7 @@ from jarvis.api.deps import CurrentUser, SessionDep
 from jarvis.core.config import get_settings
 from jarvis.services.proactivity import (
     coming_up,
+    habit_coach,
     habit_streaks,
     meeting_prep,
     owed_replies,
@@ -52,3 +53,10 @@ async def digest(
 ) -> list[dict[str, Any]]:
     """"What mattered" (#25): the few things that need you now, ranked — for the home glance."""
     return await what_mattered(session, user.id, limit=limit)
+
+
+@router.get("/coach")
+async def coach(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Habit coach (#31): celebrate a roll, nudge the smallest next step on a slip."""
+    tz = user.timezone or get_settings().timezone
+    return await habit_coach(session, user.id, tz=tz)

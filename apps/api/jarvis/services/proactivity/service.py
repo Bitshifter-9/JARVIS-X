@@ -17,6 +17,30 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def habit_coach(
+    session: AsyncSession, user_id: uuid.UUID, *, tz: str = "UTC"
+) -> dict[str, Any]:
+    """Habit coach (#31): beyond the streak number — celebrate a roll, and offer the
+    smallest next step when one has slipped. Kind, never naggy. Reads the streaks already
+    computed; no model."""
+    streaks = await habit_streaks(session, user_id, tz=tz)
+    labels = {"focus": ("focus session", "focused"), "done": ("task", "shipped a task")}
+
+    def line(kind: str, s: dict[str, int]) -> dict[str, Any]:
+        cur, longest = s["current"], s["longest"]
+        noun, verb = labels[kind]
+        if cur >= 3:
+            return {"tone": "roll", "message": f"{cur} days {verb} — you're on a roll. Keep it."}
+        if cur == 0 and longest >= 3:
+            return {"tone": "slip",
+                    "message": f"You had a {longest}-day streak. One {noun} today restarts it."}
+        if cur >= 1:
+            return {"tone": "steady", "message": f"Day {cur}. Two more makes it a streak."}
+        return {"tone": "idle", "message": None}
+
+    return {kind: {**streaks[kind], **line(kind, streaks[kind])} for kind in ("focus", "done")}
+
+
 async def what_mattered(
     session: AsyncSession, user_id: uuid.UUID, *, limit: int = 5
 ) -> list[dict[str, Any]]:

@@ -2,6 +2,7 @@
 
 from jarvis.services.proactivity.service import (
     coming_up,
+    habit_coach,
     habit_streaks,
     meeting_prep,
     owed_replies,
@@ -11,6 +12,7 @@ from jarvis.services.proactivity.service import (
 
 __all__ = [
     "coming_up",
+    "habit_coach",
     "habit_streaks",
     "meeting_prep",
     "owed_replies",
