@@ -169,9 +169,12 @@ async def focus_guard(
     tools = NUDGE_TOOLS.get(latest.platform, NUDGE_TOOLS["macos"])
     tool = tools[min(nudges, len(tools) - 1)]
     minutes = round(len(off_task) * SAMPLE_SECONDS / 60)
+    # A cognitive pause, not a scold. The craving is the target, not the willpower:
+    # catch it, name the feeling, insert a tiny interrupt, then leave the choice to the
+    # owner. Nagging strengthens the shame half of the loop and changes nothing.
     text = (
-        f"You have been on {latest.app} for {minutes} minutes during your focus block. "
-        "Back to it?"
+        f"{minutes} minutes on {latest.app}. Before anything else — what are you feeling? "
+        "Close your eyes for 60 seconds. Then it's your call."
     )
     args = {
         "mac.notify": {"title": "Focus", "body": text},

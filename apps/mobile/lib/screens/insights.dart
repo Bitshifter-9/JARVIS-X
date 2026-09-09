@@ -44,6 +44,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   List<Map<String, dynamic>> _media = const [];
   Map<String, dynamic> _commCoach = const {};
   Map<String, dynamic> _health = const {};
+  Map<String, dynamic> _peak = const {};
   Map<String, dynamic> _rediscover = const {};
   Map<String, dynamic> _labels = const {};
   bool _loading = true;
@@ -90,6 +91,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         client.mediaDiary(),
         client.commCoach(),
         client.healthCorrelation(),
+        client.peak(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -119,6 +121,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         _media = results[23] as List<Map<String, dynamic>>;
         _commCoach = results[24] as Map<String, dynamic>;
         _health = results[25] as Map<String, dynamic>;
+        _peak = results[26] as Map<String, dynamic>;
         _loading = false;
       });
     } on ProblemException catch (e) {
@@ -494,6 +497,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       if (_phrasebook.isNotEmpty) _PhrasebookCard(terms: _phrasebook),
                       if (_rhythm['enough_data'] == true) const SizedBox(height: 8),
                       if (_rhythm['enough_data'] == true) _RhythmCard(rhythm: _rhythm),
+                      if (_peak['enough_data'] == true) const SizedBox(height: 8),
+                      if (_peak['enough_data'] == true) _PeakCard(peak: _peak),
                       if (_focus['enough_data'] == true) const SizedBox(height: 8),
                       if (_focus['enough_data'] == true) _FocusCard(focus: _focus),
                       if (_hasAboutYou) const SizedBox(height: 8),
@@ -1806,6 +1811,75 @@ class _HealthCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text('${c['insight']}', style: Theme.of(context).textTheme.bodyMedium),
               ),
+        ]),
+      ),
+    );
+  }
+}
+
+
+/// Peak-performance coach: the switch tax you are paying, the breaks you owe yourself, and
+/// where your biological peak actually sits. Measured, not self-reported.
+class _PeakCard extends StatelessWidget {
+  const _PeakCard({required this.peak});
+  final Map<String, dynamic> peak;
+
+  static String _hour(int h) {
+    final ampm = h < 12 ? 'am' : 'pm';
+    return '${h % 12 == 0 ? 12 : h % 12}$ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final breaks = (peak['breaks'] as Map<String, dynamic>? ?? const {});
+    final w = peak['peak_window'] as Map<String, dynamic>?;
+    final tax = (peak['switches_per_hour'] as num?) ?? 0;
+    final owed = [
+      if (breaks['micro_due'] == true) 'a 10-minute step away today',
+      if (breaks['meso_due'] == true) 'a couple of hours this week',
+      if (breaks['macro_due'] == true) 'a half-day this month',
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.psychology_alt_outlined, size: 20),
+            const SizedBox(width: 8),
+            Text('Peak performance', style: Theme.of(context).textTheme.titleMedium),
+          ]),
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('$tax', style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: tax >= 12 ? scheme.error : null)),
+            const SizedBox(width: 6),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text('app switches / hour',
+                  style: Theme.of(context).textTheme.labelSmall),
+            ),
+          ]),
+          Text('${peak['switch_note']}', style: Theme.of(context).textTheme.bodySmall),
+          if (w != null) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Icon(Icons.bolt_outlined, size: 16, color: scheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Hardest work between ${_hour(w['start'] as int)} and '
+                    '${_hour(w['end'] as int)}.',
+                    style: Theme.of(context).textTheme.bodyMedium),
+              ),
+            ]),
+          ],
+          if (owed.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('You owe yourself ${owed.join(', ')}.',
+                style: Theme.of(context).textTheme.bodyMedium),
+            Text('A stress cycle that never closes is what burns out.',
+                style: Theme.of(context).textTheme.labelSmall),
+          ],
         ]),
       ),
     );

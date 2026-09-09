@@ -138,6 +138,15 @@ async def health_correlation(user: CurrentUser, session: SessionDep) -> dict[str
     return await correlation(session, user.id, tz=tz)
 
 
+@router.get("/peak")
+async def peak(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
+    """Peak-performance coach: context-switch tax, the 3M breaks, and your biological peak."""
+    from jarvis.services.peak import peak_report
+
+    tz = user.timezone or get_settings().timezone
+    return await peak_report(session, user.id, tz=tz)
+
+
 @router.get("/rhythm")
 async def rhythm(user: CurrentUser, session: SessionDep) -> dict[str, Any]:
     """Your energy curve by hour — when you focus and when you slump (#15), so nudges land

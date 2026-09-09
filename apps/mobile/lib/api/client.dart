@@ -639,6 +639,10 @@ class JarvisClient {
   Future<Map<String, dynamic>> rhythm() async =>
       await _send('GET', '/v1/rhythm') as Map<String, dynamic>;
 
+  /// Peak-performance coach: switch tax, 3M breaks, your biological peak.
+  Future<Map<String, dynamic>> peak() async =>
+      await _send('GET', '/v1/peak') as Map<String, dynamic>;
+
   /// Focus analytics: deep-work minutes, distraction sources, best window (#36).
   Future<Map<String, dynamic>> focusAnalytics() async =>
       await _send('GET', '/v1/focus-analytics') as Map<String, dynamic>;
