@@ -433,7 +433,7 @@ class ToolExecutor:
         # An action already addressed (by the direct-action route) keeps its device.
         if action.device_id is not None:
             candidates = [d for d in candidates if d.id == action.device_id] or candidates
-        online = [d for d in candidates if await devices.is_online(d.id)]
+        online = [d for d in candidates if await devices.has_live_connection(d.id)]
         target: Device | None = online[0] if online else (candidates[0] if candidates else None)
         if target is None:
             return {"error": f"no paired {'Mac' if platform == 'macos' else 'phone'}"}

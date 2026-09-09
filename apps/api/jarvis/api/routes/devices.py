@@ -408,6 +408,23 @@ async def deliver_artifact(
     return True
 
 
+async def _reporting_device(session, device_id: uuid.UUID, user) -> Device:  # noqa: ANN001
+    """The paired device this report came from — and proof it is alive.
+
+    Every device-scoped ingest repeated this guard, and none of them refreshed presence, so
+    a phone could be forwarding notifications all day while showing offline because no
+    socket happened to be open. Touching ``last_seen_at`` here means any authenticated
+    report counts as a heartbeat, for these endpoints and any added later.
+    """
+    from jarvis.core.errors import Forbidden
+
+    device = await session.get(Device, device_id)
+    if device is None or device.user_id != user.id or not device.is_active:
+        raise Forbidden("That device is not paired to this account")
+    device.last_seen_at = datetime.now(UTC)
+    return device
+
+
 # ── the notification mirror (PLAN.md 10.4.4) ─────────────────────────────────────────
 class MirroredNotification(BaseModel):
     package: str = Field(max_length=200)
@@ -433,20 +450,21 @@ async def mirror_notifications(
     from datetime import UTC, datetime
 
     from jarvis.core.correlation import ensure_correlation_id
-    from jarvis.core.errors import Forbidden
     from jarvis.services.event import EventService
     from jarvis.services.event.envelope import EventEnvelope, EventSource, EventType, Trust
     from jarvis.services.routines import RoutineService
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
 
     events, routines = EventService(session), RoutineService(session)
     new = 0
     for n in body[:100]:
         digest = hashlib.sha256(f"{n.package}|{n.title}|{n.text}".encode()).hexdigest()[:12]
-        object_id = n.key or f"{n.package}:{n.at or ''}:{digest}"
+        # Identity is the notification *slot* plus what it currently says. Android re-posts
+        # the same notification constantly (and updates a chat in place); keying on the
+        # slot alone would collapse real messages, keying on a timestamp made every repeat
+        # look new — which is why one message arrived in JARVIS several times.
+        object_id = f"{n.key}:{digest}" if n.key else f"{n.package}:{n.at or ''}:{digest}"
         try:
             occurred = datetime.fromisoformat(n.at) if n.at else datetime.now(UTC)
         except ValueError:
@@ -511,13 +529,10 @@ async def post_photo(
 
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from jarvis.core.errors import Forbidden
     from jarvis.core.ids import uuid7
     from jarvis.db.models.source import SourceObject
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
 
     now = datetime.now(UTC)
     retention = now + timedelta(days=30)
@@ -567,13 +582,10 @@ async def post_transcript(
     import hashlib
     from datetime import UTC, datetime, timedelta
 
-    from jarvis.core.errors import Forbidden
     from jarvis.db.models.source import SourceObject
     from jarvis.services.goal import GoalService
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
 
     now = datetime.now(UTC)
     try:
@@ -630,12 +642,9 @@ async def post_health(
 ) -> dict[str, Any]:
     """Energy/health (#38): a paired phone reports daily steps/sleep (from Health Connect),
     one row per day, correlated with your productivity. Opt-in."""
-    from jarvis.core.errors import Forbidden
     from jarvis.services.health_metrics import record_health
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
     stored = await record_health(session, user.id, [s.model_dump() for s in body])
     return {"stored": stored}
 
@@ -652,12 +661,9 @@ async def post_location(
 ) -> dict[str, Any]:
     """Location trails (#5): a paired phone reports coarse fixes; the server rounds them to
     ~500 m before storing, so it is context, not a map. Opt-in, 30-day retention."""
-    from jarvis.core.errors import Forbidden
     from jarvis.services.places import record_locations
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
     stored = await record_locations(session, user.id, [s.model_dump() for s in body])
     return {"stored": stored}
 
@@ -682,13 +688,10 @@ async def post_reading(
 
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from jarvis.core.errors import Forbidden
     from jarvis.core.ids import uuid7
     from jarvis.db.models.source import SourceObject
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
 
     now = datetime.now(UTC)
     retention = now + timedelta(days=30)
@@ -736,13 +739,10 @@ async def post_screen(
 
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    from jarvis.core.errors import Forbidden
     from jarvis.core.ids import uuid7
     from jarvis.db.models.source import SourceObject
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    await _reporting_device(session, device_id, user)
 
     now = datetime.now(UTC)
     retention = now + timedelta(days=30)
@@ -784,12 +784,9 @@ async def post_activity(
 ) -> dict[str, Any]:
     """A paired device reports what was in front of the owner: app and title, never
     pixels. Opt-in on the device; 30 days; the focus guard and "what was I doing" read it."""
-    from jarvis.core.errors import Forbidden
     from jarvis.services.activity import record
 
-    device = await session.get(Device, device_id)
-    if device is None or device.user_id != user.id or not device.is_active:
-        raise Forbidden("That device is not paired to this account")
+    device = await _reporting_device(session, device_id, user)
     stored = await record(
         session,
         user.id,

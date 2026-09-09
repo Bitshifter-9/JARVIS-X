@@ -14,6 +14,9 @@ import java.util.ArrayDeque
 class JarvisNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (sbn.packageName == packageName || sbn.isOngoing) return
+        // A messaging app posts a group *summary* ("3 new messages") alongside each real
+        // notification. Forwarding both is why one message arrived in JARVIS twice.
+        if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         val extras = sbn.notification.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
@@ -33,7 +36,12 @@ class JarvisNotificationListener : NotificationListenerService() {
                     "title" to title,
                     "text" to text,
                     "at" to java.time.Instant.ofEpochMilli(sbn.postTime).toString(),
-                    "key" to "${sbn.packageName}:${sbn.postTime}:${sbn.id}",
+                    // sbn.key is Android's own identity for the notification *slot*
+                    // (user|package|id|tag). The old key mixed in postTime, so every
+                    // update of the same chat looked like a brand-new notification —
+                    // the server could never recognise the repeat. Content is hashed
+                    // server-side, so a genuine new message still gets through.
+                    "key" to sbn.key,
                 )
             )
             while (queue.size > 200) queue.removeFirst()

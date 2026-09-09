@@ -344,7 +344,9 @@ async def test_a_mac_going_offline_queues_rather_than_fails(session, user):
 
     await devices.disconnect(device.id, "conn-1")
     await session.commit()
-    assert await devices.is_online(device.id) is False
+    # No wire to push down — the action must queue rather than fail. (Presence itself is a
+    # heartbeat question and is covered in test_presence_and_dedup.)
+    assert await devices.has_live_connection(device.id) is False
 
     dispatchable, needs_review = await devices.pending_for_device(device.id)
     await session.commit()

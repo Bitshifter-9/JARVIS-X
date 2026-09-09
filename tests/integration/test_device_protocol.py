@@ -515,16 +515,16 @@ async def test_a_stale_job_is_offered_for_review_not_run_late(session, user, pai
 
 async def test_connection_state_is_tracked(session, user, paired):
     devices = DeviceService(session)
-    assert await devices.is_online(paired.id) is False
+    assert await devices.has_live_connection(paired.id) is False
 
     await devices.connect(paired.id, "conn-1")
     await session.commit()
-    assert await devices.is_online(paired.id) is True
+    assert await devices.has_live_connection(paired.id) is True
 
     await devices.heartbeat(paired.id, "conn-1")
     await devices.disconnect(paired.id, "conn-1")
     await session.commit()
-    assert await devices.is_online(paired.id) is False
+    assert await devices.has_live_connection(paired.id) is False
 
 
 # ── 3.2 the full Mac tool set ──────────────────────────────────────────

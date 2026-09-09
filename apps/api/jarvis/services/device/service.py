@@ -27,6 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 log = get_logger(__name__)
 
 PAIRING_CHALLENGE_TTL = timedelta(minutes=5)
+# Presence is a fresh heartbeat, not an open socket. Four missed 30 s beats is quiet
+# enough to call a runtime gone without flapping on one dropped packet.
+PRESENCE_TIMEOUT = timedelta(seconds=120)
 # In-memory, because a pairing challenge is single-use and short-lived; losing them on
 # restart costs one retry and avoids a table that would need sweeping.
 _PENDING_CHALLENGES: dict[str, tuple[uuid.UUID, str, datetime]] = {}
@@ -113,7 +116,6 @@ class DeviceService:
             raise Forbidden("Challenge signature did not verify")
 
         device.paired_at = datetime.now(UTC)
-        device.last_seen_at = datetime.now(UTC)
         # The same Mac or phone pairing again (a reinstall, a wiped keychain) replaces its
         # old row instead of piling up "This phone" ×4: one live device per platform+name.
         stale = (
@@ -201,6 +203,28 @@ class DeviceService:
             await self.session.flush()
 
     async def is_online(self, device_id: uuid.UUID) -> bool:
+        """Online means *the runtime reported in recently* — not that a socket row is open.
+
+        Keying on an open connection made presence lie in both directions: closing the UI
+        dropped the socket and read as offline while the background runtime was still
+        working, and a process killed without a clean close left ``disconnected_at`` NULL
+        so a dead device showed online forever. A heartbeat that has gone quiet is the only
+        signal that degrades honestly.
+        """
+        device = await self.session.get(Device, device_id)
+        if device is None or not device.is_active or device.paired_at is None:
+            return False
+        if device.last_seen_at is None:
+            return False
+        return datetime.now(UTC) - device.last_seen_at <= PRESENCE_TIMEOUT
+
+    async def has_live_connection(self, device_id: uuid.UUID) -> bool:
+        """Is a socket open to this device *right now*?
+
+        A different question from presence: a phone whose background runtime is reporting
+        is online, but there may be no wire to push a job down — the caller should send a
+        wake push instead. Dispatch asks this; humans and routing ask ``is_online``.
+        """
         record = await self.session.scalar(
             select(DeviceConnection).where(
                 DeviceConnection.device_id == device_id,
@@ -208,6 +232,13 @@ class DeviceService:
             )
         )
         return record is not None
+
+    async def touch(self, device_id: uuid.UUID) -> None:
+        """Any authenticated report from a device is proof of life — the notification
+        mirror, an activity batch, a location fix. Presence should not need a socket."""
+        device = await self.session.get(Device, device_id)
+        if device is not None:
+            device.last_seen_at = datetime.now(UTC)
 
     # ── dispatch ───────────────────────────────────────────────────────
     async def build_envelope(self, action: Action, *, server_private_pem: str) -> JobEnvelope:

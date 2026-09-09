@@ -118,7 +118,7 @@ async def _default_device(session, user_id: uuid.UUID, platform: str) -> uuid.UU
         d for d in await devices.list_devices(user_id) if d.is_active and d.platform == platform
     ]
     for d in candidates:
-        if await devices.is_online(d.id):
+        if await devices.has_live_connection(d.id):
             return d.id
     return candidates[0].id if candidates else None
 
